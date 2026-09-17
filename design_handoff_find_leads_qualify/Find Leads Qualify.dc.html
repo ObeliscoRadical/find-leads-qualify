@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #04060E; }
+  * { box-sizing: border-box; }
+  a { color: #67E8F9; text-decoration: none; }
+  a:hover { color: #A855F7; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,160,255,0.22); border-radius: 99px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes fl-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+  @keyframes fl-scan { 0% { transform: translateX(-100%); } 100% { transform: translateX(320%); } }
+  @keyframes fl-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  @keyframes fl-ring { 0% { transform: scale(.85); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 100vh; background: radial-gradient(1100px 700px at 12% -10%, rgba(59,130,246,0.22), transparent 60%), radial-gradient(900px 600px at 88% 0%, rgba(168,85,247,0.18), transparent 62%), radial-gradient(800px 700px at 60% 110%, rgba(34,211,238,0.12), transparent 60%), linear-gradient(180deg, #060A16 0%, #04060E 55%, #05070F 100%); font-family: Manrope, system-ui, sans-serif; color: #E8EEFF; overflow: hidden;">
+
+  <div style="position: absolute; inset: 0; pointer-events: none; opacity: .5; background-image: linear-gradient(rgba(120,160,255,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(120,160,255,0.055) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(1200px 800px at 40% 0%, #000 20%, transparent 78%);"></div>
+
+  <div style="position: relative; display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100vh;">
+
+    <aside style="display: flex; flex-direction: column; gap: 26px; padding: 26px 18px 22px; border-right: 1px solid rgba(120,160,255,0.12); background: linear-gradient(180deg, rgba(10,16,34,0.72), rgba(6,9,20,0.4)); backdrop-filter: blur(18px);">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 0 8px;">
+        <div style="position: relative; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(145deg, #1E3A8A, #6D28D9 55%, #0E7490); box-shadow: 0 0 0 1px rgba(160,200,255,0.28) inset, 0 8px 26px rgba(99,102,241,0.55);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DFF6FF" stroke-width="1.9" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.4 15.4 21 21"></path><path d="M7.6 10.8l2.1 2.1 3.6-4"></path></svg>
+        </div>
+        <div>
+          <div style="font-family: Sora, sans-serif; font-weight: 700; font-size: 14.5px; letter-spacing: -0.2px; line-height: 1.1;">Find Leads<span style="color: #67E8F9;"> Qualify</span></div>
+          <div style="font-size: 10.5px; color: #7C8AB4; letter-spacing: 1.6px; text-transform: uppercase; margin-top: 3px;">AI Prospecting</div>
+        </div>
+      </div>
+
+      <nav style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: #5C6A94; padding: 0 10px 8px;">Operação</div>
+        <sc-for list="{{ nav }}" as="item" hint-placeholder-count="7">
+          <button onClick="{{ item.select }}" style="position: relative; display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 10px 12px; border-radius: 11px; border: 1px solid; font-family: Manrope, sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; background: {{ item.navBg }}; color: {{ item.navColor }}; border-color: {{ item.navBorder }}; box-shadow: {{ item.navShadow }};" style-hover="background: rgba(120,160,255,0.09); color: #E8EEFF;" data-active="{{ item.active }}">
+            <span style="position: absolute; left: -18px; top: 9px; bottom: 9px; width: 3px; border-radius: 99px; background: {{ item.navBarBg }}; box-shadow: {{ item.navBarShadow }};"></span>
+            <span style="width: 18px; display: grid; place-items: center; opacity: .95;" dangerouslySetInnerHTML="{{ item.icon }}"></span>
+            <span style="flex: 1;">{{ item.label }}</span>
+            <sc-if value="{{ item.count }}" hint-placeholder-val="{{ true }}">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 2px 7px; border-radius: 99px; background: rgba(34,211,238,0.12); border: 1px solid rgba(34,211,238,0.28); color: #67E8F9;">{{ item.count }}</span>
+            </sc-if>
+          </button>
+        </sc-for>
+      </nav>
+
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 14px;">
+        <div style="position: relative; overflow: hidden; padding: 16px; border-radius: 16px; border: 1px solid rgba(168,85,247,0.3); background: linear-gradient(160deg, rgba(88,28,135,0.4), rgba(12,18,38,0.6)); box-shadow: 0 0 34px rgba(168,85,247,0.16) inset;">
+          <div style="position: absolute; top: -20px; right: -20px; width: 90px; height: 90px; border-radius: 50%; background: radial-gradient(circle, rgba(232,121,249,0.35), transparent 70%);"></div>
+          <div style="position: relative; font-family: Sora, sans-serif; font-size: 12.5px; font-weight: 700; letter-spacing: .2px;">Créditos de IA</div>
+          <div style="position: relative; display: flex; align-items: baseline; gap: 6px; margin: 8px 0 10px;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; color: #F5D0FE;">7.420</span>
+            <span style="font-size: 11px; color: #A78BC9;">/ 10.000</span>
+          </div>
+          <div style="position: relative; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden;">
+            <div style="width: 74%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #22D3EE, #A855F7 70%, #E879F9); box-shadow: 0 0 14px rgba(168,85,247,0.8);"></div>
+          </div>
+          <button style="margin-top: 14px; width: 100%; padding: 9px; border-radius: 10px; border: 1px solid rgba(232,121,249,0.4); background: rgba(232,121,249,0.12); color: #FBE8FF; font-family: Manrope, sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .18s ease;" style-hover="background: rgba(232,121,249,0.22); box-shadow: 0 0 18px rgba(232,121,249,0.35);">Aumentar plano</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 13px; border: 1px solid rgba(120,160,255,0.12); background: rgba(255,255,255,0.03);">
+          <div style="width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-family: Sora, sans-serif; font-size: 12px; font-weight: 700; color: #061021; background: linear-gradient(145deg, #67E8F9, #818CF8);">DM</div>
+          <div style="min-width: 0;">
+            <div style="font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Daniel Moreira</div>
+            <div style="font-size: 10.5px; color: #7C8AB4;">Head de Vendas</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main style="display: flex; flex-direction: column; min-width: 0;">
+
+      <header style="position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 18px 28px; border-bottom: 1px solid rgba(120,160,255,0.12); background: rgba(6,10,22,0.72); backdrop-filter: blur(22px);">
+        <div style="min-width: 0;">
+          <div style="font-family: Sora, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -0.4px;">{{ screenTitle }}</div>
+          <div style="font-size: 12px; color: #7C8AB4; margin-top: 3px;">{{ screenSubtitle }}</div>
+        </div>
+
+        <div style="flex: 1; min-width: 200px; max-width: 420px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(120,160,255,0.16); background: rgba(255,255,255,0.035); transition: all .2s ease;" style-hover="border-color: rgba(34,211,238,0.45); box-shadow: 0 0 22px rgba(34,211,238,0.12);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C8AB4" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></svg>
+          <input placeholder="Buscar empresa, setor ou contato…" value="{{ query }}" onChange="{{ onQuery }}" style="flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: #E8EEFF; font-family: Manrope, sans-serif; font-size: 13px;" />
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5C6A94; border: 1px solid rgba(120,160,255,0.2); border-radius: 6px; padding: 2px 6px;">⌘K</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(120,160,255,0.18); background: rgba(255,255,255,0.04); color: #C6D2F0; font-family: Manrope, sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease;" style-hover="border-color: rgba(120,160,255,0.4); color: #fff;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h18M6 12h12M10 19h4"></path></svg>
+            Filtros
+          </button>
+          <button onClick="{{ runAi }}" style="position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; padding: 11px 18px; border-radius: 12px; border: 1px solid rgba(160,200,255,0.3); background: linear-gradient(120deg, #2563EB, #7C3AED 55%, #06B6D4); color: #F4F9FF; font-family: Manrope, sans-serif; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; box-shadow: 0 10px 30px rgba(79,70,229,0.45); transition: transform .18s ease, box-shadow .18s ease;" style-hover="transform: translateY(-1px); box-shadow: 0 14px 38px rgba(79,70,229,0.6);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>
+            Qualificar com IA
+          </button>
+        </div>
+      </header>
+
+      <div style="display: flex; flex-direction: column; gap: 20px; padding: 24px 28px 40px;">
+
+        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px;">
+          <sc-for list="{{ kpis }}" as="kpi" hint-placeholder-count="4">
+            <div style="position: relative; overflow: hidden; padding: 18px; border-radius: 18px; border: 1px solid rgba(120,160,255,0.14); background: linear-gradient(155deg, rgba(18,26,50,0.85), rgba(8,12,26,0.6)); box-shadow: 0 18px 40px rgba(2,6,20,0.55); transition: transform .2s ease, border-color .2s ease;" style-hover="transform: translateY(-3px); border-color: rgba(34,211,238,0.34);">
+              <div style="position: absolute; top: -34px; right: -34px; width: 120px; height: 120px; border-radius: 50%; opacity: .55; background: {{ kpi.glow }};"></div>
+              <div style="position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: #8A98C0;">{{ kpi.label }}</div>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 99px; border: 1px solid; white-space: nowrap; color: {{ kpi.deltaColor }}; border-color: {{ kpi.deltaBorder }}; background: {{ kpi.deltaBg }};">{{ kpi.delta }}</span>
+              </div>
+              <div style="position: relative; display: flex; align-items: flex-end; gap: 8px; margin-top: 12px;">
+                <span style="font-family: Sora, sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -1px; line-height: 1; white-space: nowrap;">{{ kpi.value }}</span>
+                <span style="font-size: 11.5px; color: #7C8AB4; padding-bottom: 4px; white-space: nowrap;">{{ kpi.unit }}</span>
+              </div>
+              <div style="position: relative; margin-top: 14px; height: 34px;">{{ kpi.spark }}</div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start;">
+
+          <div style="position: relative; overflow: hidden; border-radius: 20px; border: 1px solid rgba(120,160,255,0.14); background: linear-gradient(160deg, rgba(16,23,45,0.9), rgba(7,11,24,0.7)); box-shadow: 0 22px 50px rgba(2,6,20,0.5);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 18px 20px 14px; border-bottom: 1px solid rgba(120,160,255,0.1);">
+              <div>
+                <div style="font-family: Sora, sans-serif; font-size: 15px; font-weight: 700;">Leads qualificados pela IA</div>
+                <div style="font-size: 11.5px; color: #7C8AB4; margin-top: 3px;">Ordenado por score preditivo · atualizado há 4 min</div>
+              </div>
+              <div style="display: flex; gap: 7px;">
+                <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+                  <button onClick="{{ tab.select }}" style="padding: 7px 13px; border-radius: 99px; font-family: Manrope, sans-serif; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: all .18s ease; border: 1px solid; color: {{ tab.color }}; border-color: {{ tab.border }}; background: {{ tab.bg }};">{{ tab.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 32px minmax(90px, 1fr) 66px 78px; gap: 12px; padding: 11px 20px; font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: #5C6A94; border-bottom: 1px solid rgba(120,160,255,0.08);">
+              <div></div><div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Empresa &amp; contato</div><div style="white-space: nowrap;">Score</div><div style="white-space: nowrap;">Status</div>
+            </div>
+
+            <sc-for list="{{ leads }}" as="lead" hint-placeholder-count="6">
+              <div onClick="{{ lead.select }}" style="display: grid; grid-template-columns: 32px minmax(90px, 1fr) 66px 78px; gap: 12px; align-items: center; padding: {{ lead.pad }} 20px; border-bottom: 1px solid rgba(120,160,255,0.07); cursor: pointer; transition: background .18s ease; background: {{ lead.rowBg }};" style-hover="background: rgba(120,160,255,0.07);">
+                <div style="width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-family: Sora, sans-serif; font-size: 11px; font-weight: 700; color: #DDEBFF; border: 1px solid rgba(160,200,255,0.2); background: {{ lead.logoBg }};">{{ lead.initials }}</div>
+                <div style="min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ lead.company }}</span>
+                    <sc-if value="{{ lead.isNew }}" hint-placeholder-val="{{ true }}">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: .6px; padding: 2px 6px; border-radius: 5px; color: #67E8F9; background: rgba(34,211,238,0.12); border: 1px solid rgba(34,211,238,0.3);">NOVO</span>
+                    </sc-if>
+                  </div>
+                  <div style="font-size: 11.5px; color: #8A98C0; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ lead.contact }} · {{ lead.role }} · {{ lead.meta }}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 9px;">{{ lead.ring }}</div>
+                <div>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; border: 1px solid; white-space: nowrap; color: {{ lead.statusColor }}; border-color: {{ lead.statusBorder }}; background: {{ lead.statusBg }};">
+                    <span style="width: 5px; height: 5px; border-radius: 50%; background: currentColor;"></span>{{ lead.status }}
+                  </span>
+                </div>
+              </div>
+            </sc-for>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px;">
+              <div style="font-size: 11.5px; color: #7C8AB4;">Mostrando {{ shownCount }} de 1.284 leads no segmento ativo</div>
+              <a href="#" style="font-size: 12px; font-weight: 700;">Abrir lista completa →</a>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+
+            <div style="position: relative; overflow: hidden; padding: 18px; border-radius: 20px; border: 1px solid rgba(34,211,238,0.24); background: linear-gradient(160deg, rgba(8,47,73,0.7), rgba(9,14,30,0.75)); box-shadow: 0 0 40px rgba(34,211,238,0.12) inset;">
+              <div style="position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(103,232,249,0.14), transparent); width: 30%; animation: fl-scan 3.4s linear infinite;"></div>
+              <div style="position: relative; display: flex; align-items: center; gap: 10px;">
+                <span style="position: relative; width: 9px; height: 9px; border-radius: 50%; background: #22D3EE; box-shadow: 0 0 12px #22D3EE;">
+                  <span style="position: absolute; inset: -4px; border-radius: 50%; border: 1px solid rgba(34,211,238,0.6); animation: fl-ring 1.8s ease-out infinite;"></span>
+                </span>
+                <div style="font-family: Sora, sans-serif; font-size: 13.5px; font-weight: 700;">Motor de qualificação ativo</div>
+              </div>
+              <div style="position: relative; font-size: 11.5px; color: #9FD9E8; margin-top: 8px; line-height: 1.55;">Analisando 412 empresas do setor de logística contra o seu ICP e sinais de intenção de compra.</div>
+              <div style="position: relative; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #67E8F9; margin: 14px 0 6px;">
+                <span>lote 3 de 5</span><span>68%</span>
+              </div>
+              <div style="position: relative; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden;">
+                <div style="width: 68%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #06B6D4, #67E8F9); box-shadow: 0 0 14px rgba(34,211,238,0.8);"></div>
+              </div>
+            </div>
+
+            <div style="padding: 18px; border-radius: 20px; border: 1px solid rgba(120,160,255,0.14); background: linear-gradient(160deg, rgba(16,23,45,0.9), rgba(7,11,24,0.7));">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-family: Sora, sans-serif; font-size: 14px; font-weight: 700;">Pipeline</div>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8A98C0;">R$ 4,8M</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 13px; margin-top: 16px;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 6px;"><span style="color: #C6D2F0; font-weight: 600;">Descobertos</span><span style="font-family: 'JetBrains Mono', monospace; color: #8A98C0;">1.284</span></div>
+                  <div style="height: 8px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden;"><div style="width: 100%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, rgba(59,130,246,0.55), #3B82F6);"></div></div>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 6px;"><span style="color: #C6D2F0; font-weight: 600;">Qualificados IA</span><span style="font-family: 'JetBrains Mono', monospace; color: #8A98C0;">642</span></div>
+                  <div style="height: 8px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden;"><div style="width: 78%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, rgba(99,102,241,0.6), #818CF8); box-shadow: 0 0 12px rgba(129,140,248,0.5);"></div></div>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 6px;"><span style="color: #C6D2F0; font-weight: 600;">Em contato</span><span style="font-family: 'JetBrains Mono', monospace; color: #8A98C0;">318</span></div>
+                  <div style="height: 8px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden;"><div style="width: 54%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, rgba(168,85,247,0.6), #A855F7); box-shadow: 0 0 12px rgba(168,85,247,0.5);"></div></div>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 6px;"><span style="color: #C6D2F0; font-weight: 600;">Reunião marcada</span><span style="font-family: 'JetBrains Mono', monospace; color: #8A98C0;">97</span></div>
+                  <div style="height: 8px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden;"><div style="width: 32%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, rgba(232,121,249,0.6), #E879F9); box-shadow: 0 0 12px rgba(232,121,249,0.5);"></div></div>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 6px;"><span style="color: #C6D2F0; font-weight: 600;">Fechado</span><span style="font-family: 'JetBrains Mono', monospace; color: #8A98C0;">41</span></div>
+                  <div style="height: 8px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden;"><div style="width: 16%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, rgba(103,232,249,0.7), #67E8F9); box-shadow: 0 0 12px rgba(103,232,249,0.6);"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding: 18px; border-radius: 20px; border: 1px solid rgba(120,160,255,0.14); background: linear-gradient(160deg, rgba(16,23,45,0.9), rgba(7,11,24,0.7));">
+              <div style="font-family: Sora, sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 14px;">Ações rápidas</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button style="display: flex; flex-direction: column; gap: 9px; padding: 13px; border-radius: 14px; border: 1px solid rgba(120,160,255,0.16); background: rgba(255,255,255,0.035); color: #D6E1FB; font-family: Manrope, sans-serif; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; transition: all .18s ease;" style-hover="border-color: rgba(34,211,238,0.45); background: rgba(34,211,238,0.08); transform: translateY(-2px);">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#67E8F9" stroke-width="1.9" stroke-linecap="round"><path d="M3 7l9 6 9-6"></path><rect x="3" y="5" width="18" height="14" rx="2"></rect></svg>
+                  Sequência de e-mail
+                </button>
+                <button style="display: flex; flex-direction: column; gap: 9px; padding: 13px; border-radius: 14px; border: 1px solid rgba(120,160,255,0.16); background: rgba(255,255,255,0.035); color: #D6E1FB; font-family: Manrope, sans-serif; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; transition: all .18s ease;" style-hover="border-color: rgba(168,85,247,0.45); background: rgba(168,85,247,0.08); transform: translateY(-2px);">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C084FC" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+                  Nova busca de ICP
+                </button>
+                <button style="display: flex; flex-direction: column; gap: 9px; padding: 13px; border-radius: 14px; border: 1px solid rgba(120,160,255,0.16); background: rgba(255,255,255,0.035); color: #D6E1FB; font-family: Manrope, sans-serif; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; transition: all .18s ease;" style-hover="border-color: rgba(59,130,246,0.45); background: rgba(59,130,246,0.08); transform: translateY(-2px);">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#93C5FD" stroke-width="1.9" stroke-linecap="round"><path d="M4 19V5"></path><path d="M4 15l5-5 4 4 7-7"></path></svg>
+                  Relatório semanal
+                </button>
+                <button style="display: flex; flex-direction: column; gap: 9px; padding: 13px; border-radius: 14px; border: 1px solid rgba(120,160,255,0.16); background: rgba(255,255,255,0.035); color: #D6E1FB; font-family: Manrope, sans-serif; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; transition: all .18s ease;" style-hover="border-color: rgba(232,121,249,0.45); background: rgba(232,121,249,0.08); transform: translateY(-2px);">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#F0ABFC" stroke-width="1.9" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                  Enriquecer contatos
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start;">
+
+          <div style="padding: 18px 20px 12px; border-radius: 20px; border: 1px solid rgba(120,160,255,0.14); background: linear-gradient(160deg, rgba(16,23,45,0.9), rgba(7,11,24,0.7)); box-shadow: 0 22px 50px rgba(2,6,20,0.5);">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+              <div>
+                <div style="font-family: Sora, sans-serif; font-size: 15px; font-weight: 700;">Descoberta vs. qualificação</div>
+                <div style="font-size: 11.5px; color: #7C8AB4; margin-top: 3px;">Últimas 12 semanas</div>
+              </div>
+              <div style="display: flex; gap: 16px; font-size: 11.5px;">
+                <span style="display: inline-flex; align-items: center; gap: 7px; color: #9FB4E0;"><span style="width: 18px; height: 3px; border-radius: 99px; background: #22D3EE; box-shadow: 0 0 10px #22D3EE;"></span>Descobertos</span>
+                <span style="display: inline-flex; align-items: center; gap: 7px; color: #9FB4E0;"><span style="width: 18px; height: 3px; border-radius: 99px; background: #A855F7; box-shadow: 0 0 10px #A855F7;"></span>Qualificados</span>
+              </div>
+            </div>
+            <div style="margin-top: 14px;">{{ chart }}</div>
+          </div>
+
+          <div style="padding: 18px; border-radius: 20px; border: 1px solid rgba(120,160,255,0.14); background: linear-gradient(160deg, rgba(16,23,45,0.9), rgba(7,11,24,0.7));">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+              <div style="font-family: Sora, sans-serif; font-size: 14px; font-weight: 700;">Histórico de interações</div>
+              <span style="font-size: 11px; color: #7C8AB4;">{{ selectedName }}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; margin-top: 16px;">
+              <sc-for list="{{ timeline }}" as="ev" hint-placeholder-count="5">
+                <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px;">
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                    <span style="width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; background: {{ ev.dot }}; box-shadow: 0 0 10px {{ ev.dot }};"></span>
+                    <span style="flex: 1; width: 1px; background: linear-gradient(180deg, rgba(120,160,255,0.28), transparent);"></span>
+                  </div>
+                  <div style="padding-bottom: 18px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <span style="font-size: 12.5px; font-weight: 700;">{{ ev.title }}</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5C6A94;">{{ ev.when }}</span>
+                    </div>
+                    <div style="font-size: 11.5px; color: #8A98C0; margin-top: 4px; line-height: 1.55;">{{ ev.body }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <sc-if value="{{ detail }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDetail }}" style="position: fixed; inset: 0; z-index: 20; background: rgba(3,6,16,0.66); backdrop-filter: blur(4px);"></div>
+    <aside style="position: fixed; top: 0; right: 0; bottom: 0; z-index: 21; width: min(420px, 92vw); overflow-y: auto; padding: 24px; border-left: 1px solid rgba(120,160,255,0.2); background: linear-gradient(190deg, rgba(14,21,44,0.98), rgba(5,8,18,0.98)); box-shadow: -30px 0 80px rgba(2,5,16,0.7);">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+        <div style="display: flex; gap: 13px; min-width: 0;">
+          <div style="width: 46px; height: 46px; flex: none; border-radius: 13px; display: grid; place-items: center; font-family: Sora, sans-serif; font-size: 14px; font-weight: 700; color: #E6F2FF; border: 1px solid rgba(160,200,255,0.22); background: {{ detail.logoBg }};">{{ detail.initials }}</div>
+          <div style="min-width: 0;">
+            <div style="font-family: Sora, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.3px;">{{ detail.company }}</div>
+            <div style="font-size: 11.5px; color: #8A98C0; margin-top: 4px;">{{ detail.meta }}</div>
+          </div>
+        </div>
+        <button onClick="{{ closeDetail }}" style="flex: none; width: 32px; height: 32px; border-radius: 10px; border: 1px solid rgba(120,160,255,0.2); background: rgba(255,255,255,0.04); color: #9FB4E0; cursor: pointer; font-size: 15px; line-height: 1; transition: all .18s ease;" style-hover="color: #fff; border-color: rgba(232,121,249,0.5);">×</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;">
+        <div style="padding: 14px; border-radius: 14px; border: 1px solid rgba(120,160,255,0.14); background: rgba(255,255,255,0.035);">
+          <div style="font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; color: #7C8AB4;">Score IA</div>
+          <div style="font-family: Sora, sans-serif; font-size: 26px; font-weight: 700; margin-top: 6px; color: {{ detail.scoreColor }};">{{ detail.score }}</div>
+        </div>
+        <div style="padding: 14px; border-radius: 14px; border: 1px solid rgba(120,160,255,0.14); background: rgba(255,255,255,0.035);">
+          <div style="font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; color: #7C8AB4;">Fit com ICP</div>
+          <div style="font-family: Sora, sans-serif; font-size: 26px; font-weight: 700; margin-top: 6px; color: #67E8F9;">{{ detail.fit }}</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px; padding: 16px; border-radius: 16px; border: 1px solid rgba(168,85,247,0.28); background: linear-gradient(155deg, rgba(76,29,149,0.35), rgba(10,15,32,0.6));">
+        <div style="display: flex; align-items: center; gap: 8px; font-family: Sora, sans-serif; font-size: 12.5px; font-weight: 700; color: #E9D5FF;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E879F9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>
+          Resumo da IA
+        </div>
+        <div style="font-size: 12px; color: #CBB8E8; line-height: 1.65; margin-top: 10px;">{{ detail.summary }}</div>
+      </div>
+
+      <div style="margin-top: 18px;">
+        <div style="font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: #5C6A94; margin-bottom: 10px;">Sinais detectados</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <sc-for list="{{ detail.signals }}" as="sig" hint-placeholder-count="4">
+            <span style="padding: 6px 11px; border-radius: 99px; font-size: 11.5px; font-weight: 600; color: #BFE9F5; border: 1px solid rgba(34,211,238,0.26); background: rgba(34,211,238,0.08);">{{ sig }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <div style="font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: #5C6A94; margin-bottom: 10px;">Contato principal</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; border: 1px solid rgba(120,160,255,0.14); background: rgba(255,255,255,0.035);">
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px;"><span style="color: #7C8AB4;">Nome</span><span style="font-weight: 700;">{{ detail.contact }}</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px;"><span style="color: #7C8AB4;">Cargo</span><span style="font-weight: 700;">{{ detail.role }}</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px;"><span style="color: #7C8AB4;">E-mail</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #67E8F9;">{{ detail.email }}</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px;"><span style="color: #7C8AB4;">Telefone</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #C6D2F0;">{{ detail.phone }}</span></div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px;">
+        <button style="padding: 12px; border-radius: 12px; border: 1px solid rgba(160,200,255,0.28); background: linear-gradient(120deg, #2563EB, #7C3AED 60%, #06B6D4); color: #F4F9FF; font-family: Manrope, sans-serif; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 28px rgba(79,70,229,0.4); transition: transform .18s ease;" style-hover="transform: translateY(-1px);">Iniciar contato</button>
+        <button style="padding: 12px; border-radius: 12px; border: 1px solid rgba(120,160,255,0.2); background: rgba(255,255,255,0.04); color: #C6D2F0; font-family: Manrope, sans-serif; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all .18s ease;" style-hover="border-color: rgba(120,160,255,0.45); color: #fff;">Mover no pipeline</button>
+      </div>
+    </aside>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Padrão&quot;,&quot;Compacto&quot;],&quot;default&quot;:&quot;Padrão&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;leadCount&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:6,&quot;min&quot;:3,&quot;max&quot;:6,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+const h = React.createElement;
+
+const NAV = [
+  { id: "overview", label: "Visão geral", count: null, title: "Visão geral dos leads", sub: "Painel de prospecção · 16 set 2026, 09:42", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="11" width="7" height="10" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/></svg>' },
+  { id: "discover", label: "Descobrir leads", count: "24", title: "Descoberta de leads", sub: "Buscas ativas e novas fontes de dados", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>' },
+  { id: "qualify", label: "Qualificação IA", count: "3", title: "Qualificação por IA", sub: "Modelos de scoring e regras de ICP", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18 17l.9 2.1L21 20l-2.1.9L18 23l-.9-2.1L15 20l2.1-.9z"/></svg>' },
+  { id: "pipeline", label: "Pipeline", count: null, title: "Pipeline de vendas", sub: "Status e progressão dos leads", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M6 12h12M9 18h6"/></svg>' },
+  { id: "companies", label: "Empresas", count: null, title: "Base de empresas", sub: "Dados enriquecidos e contatos", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="4" y="4" width="10" height="17" rx="1.5"/><path d="M14 9h6v12h-6M7 8h4M7 12h4M7 16h4"/></svg>' },
+  { id: "metrics", label: "Métricas", count: null, title: "Métricas e resultados", sub: "Performance de prospecção", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V4"/><path d="M4 16l5-5 4 4 7-8"/></svg>' },
+  { id: "settings", label: "Configurações", count: null, title: "Configurações", sub: "Equipe, integrações e créditos", icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.4-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.8 1.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg>' }
+];
+
+const LEADS = [
+  { id: "nexora", company: "Nexora Health", initials: "NH", contact: "Marina Alves", role: "CTO", meta: "SaaS Saúde · 240 func. · São Paulo", score: 94, status: "Quente", isNew: true, email: "m.alves@nexora.health", phone: "+55 11 94882-1120", fit: "96%", signals: ["Contratou 12 vagas de eng.", "Série B há 3 meses", "Stack compatível", "Tráfego +48%"], summary: "Encaixe muito forte no ICP: empresa de saúde digital em expansão pós-Série B, com equipe técnica a crescer e dor clara de integração de dados clínicos. O momento de compra é agora — orçamento aprovado para o trimestre." },
+  { id: "volt", company: "Volt Logística", initials: "VL", contact: "Rui Pinheiro", role: "Dir. Operações", meta: "Logística · 1.100 func. · Curitiba", score: 88, status: "Quente", isNew: true, email: "rui.pinheiro@voltlog.com", phone: "+55 41 99120-4471", fit: "91%", signals: ["Abriu 3 centros", "Pesquisa por TMS", "Renovação de contrato"], summary: "Operação em escala com renovação de contrato do fornecedor atual prevista para novembro. Sinais de pesquisa ativa por soluções de roteirização indicam janela de decisão curta." },
+  { id: "cindra", company: "Cindra Fintech", initials: "CF", contact: "Ana Sequeira", role: "Head de Growth", meta: "Fintech · 180 func. · Lisboa", score: 81, status: "Morno", isNew: false, email: "ana.sequeira@cindra.io", phone: "+351 912 445 018", fit: "84%", signals: ["Nova liderança de growth", "Expansão para o Brasil"], summary: "Fit bom, timing médio. Nova liderança de growth tende a reavaliar ferramentas nos primeiros 90 dias — vale uma abordagem consultiva focada em expansão internacional." },
+  { id: "atlas", company: "Atlas Manufatura", initials: "AM", contact: "Pedro Coutinho", role: "COO", meta: "Indústria · 2.400 func. · Joinville", score: 76, status: "Morno", isNew: false, email: "p.coutinho@atlasmf.com.br", phone: "+55 47 98811-2290", fit: "79%", signals: ["Projeto de digitalização", "Orçamento anual em revisão"], summary: "Ciclo de compra longo e comité de decisão amplo, mas o projeto de digitalização citado em entrevista pública cria um gancho legítimo para a primeira conversa." },
+  { id: "lumen", company: "Lumen Retail", initials: "LR", contact: "Sofia Braga", role: "Diretora de CX", meta: "Varejo · 620 func. · Porto Alegre", score: 64, status: "Nutrir", isNew: false, email: "sofia.braga@lumenretail.com", phone: "+55 51 99033-7742", fit: "66%", signals: ["Sem sinais de intenção", "Contrato ativo até 2027"], summary: "Fit razoável, timing fraco: contrato com concorrente até 2027. Recomendado manter em fluxo de nutrição com conteúdo de benchmark do setor." },
+  { id: "orbita", company: "Órbita Energia", initials: "OE", contact: "Tiago Neves", role: "Gerente Comercial", meta: "Energia · 95 func. · Recife", score: 52, status: "Frio", isNew: false, email: "tiago.neves@orbitaenergia.com", phone: "+55 81 98442-3310", fit: "54%", signals: ["Porte abaixo do ICP"], summary: "Porte e maturidade tecnológica abaixo do ICP definido. Sem sinais de intenção nos últimos 90 dias — baixa prioridade para a equipe." }
+];
+
+const TIMELINE = [
+  { dot: "#67E8F9", title: "E-mail aberto 3×", when: "hoje, 08:12", body: "Sequência \"Eficiência clínica\" — clique no estudo de caso Hospital Aurora." },
+  { dot: "#A855F7", title: "Score recalculado 87 → 94", when: "ontem", body: "Novo sinal: 12 vagas de engenharia publicadas e aumento de tráfego orgânico." },
+  { dot: "#3B82F6", title: "Ligação atendida · 6 min", when: "12 set", body: "Marina confirmou avaliação de fornecedores no Q4 e pediu proposta técnica." },
+  { dot: "#E879F9", title: "Lead enriquecido", when: "09 set", body: "Organograma, stack e faturamento estimado adicionados pela IA." },
+  { dot: "#475A86", title: "Lead descoberto", when: "04 set", body: "Origem: busca de ICP \"Saúde digital · Série B · Brasil\"." }
+];
+
+function spark(points, color, glow) {
+  const w = 160, hgt = 34, max = Math.max(...points), min = Math.min(...points);
+  const pts = points.map((p, i) => [i * (w / (points.length - 1)), hgt - 3 - ((p - min) / (max - min || 1)) * (hgt - 8)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const gid = "sp" + color.replace(/[^a-z0-9]/gi, "");
+  return h("svg", { viewBox: "0 0 " + w + " " + hgt, preserveAspectRatio: "none", style: { width: "100%", height: hgt, display: "block", overflow: "visible" } },
+    h("defs", null, h("linearGradient", { id: gid, x1: "0", y1: "0", x2: "0", y2: "1" },
+      h("stop", { offset: "0%", stopColor: color, stopOpacity: 0.38 }),
+      h("stop", { offset: "100%", stopColor: color, stopOpacity: 0 }))),
+    h("path", { d: line + " L" + w + " " + hgt + " L0 " + hgt + " Z", fill: "url(#" + gid + ")" }),
+    h("path", { d: line, fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", style: { filter: "drop-shadow(0 0 6px " + glow + ")" } }),
+    h("circle", { cx: pts[pts.length - 1][0], cy: pts[pts.length - 1][1], r: 2.6, fill: "#fff", style: { filter: "drop-shadow(0 0 6px " + color + ")" } })
+  );
+}
+
+function ring(score) {
+  const color = score >= 85 ? "#67E8F9" : score >= 75 ? "#818CF8" : score >= 60 ? "#C084FC" : "#7E8BB0";
+  const r = 15, c = 2 * Math.PI * r;
+  return h("div", { style: { display: "flex", alignItems: "center", gap: "9px" } },
+    h("svg", { width: 38, height: 38, viewBox: "0 0 38 38" },
+      h("circle", { cx: 19, cy: 19, r: r, fill: "none", stroke: "rgba(255,255,255,0.09)", strokeWidth: 3.2 }),
+      h("circle", { cx: 19, cy: 19, r: r, fill: "none", stroke: color, strokeWidth: 3.2, strokeLinecap: "round",
+        strokeDasharray: c, strokeDashoffset: c * (1 - score / 100), transform: "rotate(-90 19 19)",
+        style: { filter: "drop-shadow(0 0 5px " + color + ")", transition: "stroke-dashoffset .6s ease" } })),
+    h("span", { style: { fontFamily: "'JetBrains Mono', monospace", fontSize: "13px", fontWeight: 600, color: color } }, score)
+  );
+}
+
+function areaChart() {
+  const a = [180, 240, 210, 300, 275, 360, 420, 390, 470, 510, 480, 560];
+  const b = [70, 105, 95, 150, 140, 190, 230, 215, 270, 300, 285, 342];
+  const w = 720, hgt = 220, pad = 28, max = 620;
+  const X = i => pad + i * ((w - pad * 2) / (a.length - 1));
+  const Y = v => hgt - 26 - (v / max) * (hgt - 56);
+  const mk = arr => arr.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+  const grid = [0, 155, 310, 465, 620].map(v => h("g", { key: v },
+    h("line", { x1: pad, y1: Y(v), x2: w - pad, y2: Y(v), stroke: "rgba(120,160,255,0.1)", strokeWidth: 1 }),
+    h("text", { x: 2, y: Y(v) + 3.5, fill: "#5C6A94", fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }, v)));
+  const labels = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"].map((l, i) =>
+    h("text", { key: l, x: X(i), y: hgt - 6, fill: "#5C6A94", fontSize: 9, textAnchor: "middle", fontFamily: "'JetBrains Mono', monospace" }, l));
+  return h("svg", { viewBox: "0 0 " + w + " " + hgt, style: { width: "100%", height: "auto", display: "block" } },
+    h("defs", null,
+      h("linearGradient", { id: "gA", x1: "0", y1: "0", x2: "0", y2: "1" },
+        h("stop", { offset: "0%", stopColor: "#22D3EE", stopOpacity: 0.34 }), h("stop", { offset: "100%", stopColor: "#22D3EE", stopOpacity: 0 })),
+      h("linearGradient", { id: "gB", x1: "0", y1: "0", x2: "0", y2: "1" },
+        h("stop", { offset: "0%", stopColor: "#A855F7", stopOpacity: 0.3 }), h("stop", { offset: "100%", stopColor: "#A855F7", stopOpacity: 0 }))),
+    grid,
+    h("path", { d: mk(a) + " L" + X(a.length - 1) + " " + Y(0) + " L" + pad + " " + Y(0) + " Z", fill: "url(#gA)" }),
+    h("path", { d: mk(b) + " L" + X(b.length - 1) + " " + Y(0) + " L" + pad + " " + Y(0) + " Z", fill: "url(#gB)" }),
+    h("path", { d: mk(a), fill: "none", stroke: "#22D3EE", strokeWidth: 2.2, strokeLinecap: "round", style: { filter: "drop-shadow(0 0 7px rgba(34,211,238,0.75))" } }),
+    h("path", { d: mk(b), fill: "none", stroke: "#A855F7", strokeWidth: 2.2, strokeLinecap: "round", style: { filter: "drop-shadow(0 0 7px rgba(168,85,247,0.7))" } }),
+    a.map((v, i) => h("circle", { key: "a" + i, cx: X(i), cy: Y(v), r: 2.4, fill: "#061021", stroke: "#67E8F9", strokeWidth: 1.4 })),
+    b.map((v, i) => h("circle", { key: "b" + i, cx: X(i), cy: Y(v), r: 2.4, fill: "#061021", stroke: "#C084FC", strokeWidth: 1.4 })),
+    labels
+  );
+}
+
+const STATUS = {
+  "Quente": { color: "#FDA4AF", border: "rgba(244,114,182,0.34)", bg: "rgba(244,114,182,0.1)" },
+  "Morno": { color: "#FCD34D", border: "rgba(250,204,21,0.3)", bg: "rgba(250,204,21,0.09)" },
+  "Nutrir": { color: "#A5B4FC", border: "rgba(129,140,248,0.32)", bg: "rgba(129,140,248,0.1)" },
+  "Frio": { color: "#94A3B8", border: "rgba(148,163,184,0.28)", bg: "rgba(148,163,184,0.08)" }
+};
+
+const LOGO_BG = ["linear-gradient(145deg, rgba(37,99,235,0.55), rgba(14,116,144,0.55))",
+  "linear-gradient(145deg, rgba(109,40,217,0.55), rgba(37,99,235,0.5))",
+  "linear-gradient(145deg, rgba(6,182,212,0.45), rgba(79,70,229,0.5))",
+  "linear-gradient(145deg, rgba(232,121,249,0.4), rgba(109,40,217,0.5))"];
+
+class Component extends DCLogic {
+  state = { navId: "overview", tab: "Todos", selected: null, query: "" };
+
+  renderVals() {
+    const dense = (this.props.density ?? "Padrão") === "Compacto";
+    const tab = this.state.tab;
+    const limit = this.props.leadCount ?? 6;
+    const filtered = LEADS.filter(l => {
+      if (tab === "Quentes" && l.status !== "Quente") return false;
+      if (tab === "Novos" && !l.isNew) return false;
+      if (tab === "Score 80+" && l.score < 80) return false;
+      const q = this.state.query.trim().toLowerCase();
+      if (q && !(l.company + l.contact + l.meta).toLowerCase().includes(q)) return false;
+      return true;
+    }).slice(0, limit);
+
+    const navItem = NAV.find(n => n.id === this.state.navId) || NAV[0];
+    const sel = this.state.selected ? LEADS.find(l => l.id === this.state.selected) : null;
+
+    return {
+      screenTitle: navItem.title,
+      screenSubtitle: navItem.sub,
+      query: this.state.query,
+      onQuery: e => this.setState({ query: e.target.value }),
+      runAi: () => this.setState({ tab: "Score 80+", selected: "nexora" }),
+      shownCount: filtered.length,
+      selectedName: sel ? sel.company : "Nexora Health",
+
+      nav: NAV.map(n => {
+        const on = n.id === this.state.navId;
+        return {
+          label: n.label, count: n.count, active: on,
+          icon: { __html: n.icon },
+          navBg: on ? "linear-gradient(100deg, rgba(37,99,235,0.28), rgba(124,58,237,0.22) 60%, rgba(6,182,212,0.16))" : "transparent",
+          navColor: on ? "#F2F7FF" : "#93A0C4",
+          navBorder: on ? "rgba(103,232,249,0.34)" : "transparent",
+          navShadow: on ? "0 6px 22px rgba(56,89,214,0.32), 0 0 22px rgba(34,211,238,0.14) inset" : "none",
+          navBarBg: on ? "linear-gradient(180deg, #67E8F9, #A855F7)" : "transparent",
+          navBarShadow: on ? "0 0 10px rgba(103,232,249,0.9)" : "none",
+          select: () => this.setState({ navId: n.id })
+        };
+      }),
+
+      kpis: [
+        { label: "Leads descobertos", value: "1.284", unit: "este mês", delta: "+18,4%", deltaColor: "#67E8F9", deltaBorder: "rgba(34,211,238,0.3)", deltaBg: "rgba(34,211,238,0.1)", glow: "radial-gradient(circle, rgba(34,211,238,0.3), transparent 70%)", spark: spark([180, 240, 210, 300, 275, 360, 420, 470, 560], "#22D3EE", "rgba(34,211,238,0.8)") },
+        { label: "Qualificados IA", value: "642", unit: "50% do total", delta: "+9,1%", deltaColor: "#C4B5FD", deltaBorder: "rgba(168,85,247,0.3)", deltaBg: "rgba(168,85,247,0.1)", glow: "radial-gradient(circle, rgba(168,85,247,0.28), transparent 70%)", spark: spark([70, 105, 95, 150, 190, 230, 270, 300, 342], "#A855F7", "rgba(168,85,247,0.8)") },
+        { label: "Taxa de conversão", value: "12,7", unit: "% reunião", delta: "+2,3 p.p.", deltaColor: "#93C5FD", deltaBorder: "rgba(59,130,246,0.32)", deltaBg: "rgba(59,130,246,0.1)", glow: "radial-gradient(circle, rgba(59,130,246,0.3), transparent 70%)", spark: spark([8, 9.2, 8.6, 10.1, 10.8, 11.2, 12.0, 12.4, 12.7], "#3B82F6", "rgba(59,130,246,0.8)") },
+        { label: "Receita em pipeline", value: "R$ 4,8M", unit: "ponderada", delta: "+24,6%", deltaColor: "#F5D0FE", deltaBorder: "rgba(232,121,249,0.32)", deltaBg: "rgba(232,121,249,0.1)", glow: "radial-gradient(circle, rgba(232,121,249,0.26), transparent 70%)", spark: spark([1.9, 2.2, 2.1, 2.8, 3.1, 3.6, 4.0, 4.4, 4.8], "#E879F9", "rgba(232,121,249,0.8)") }
+      ],
+
+      tabs: ["Todos", "Quentes", "Novos", "Score 80+"].map(t => ({
+        label: t,
+        color: t === tab ? "#061021" : "#9FB4E0",
+        border: t === tab ? "transparent" : "rgba(120,160,255,0.18)",
+        bg: t === tab ? "linear-gradient(120deg, #67E8F9, #A78BFA)" : "rgba(255,255,255,0.035)",
+        select: () => this.setState({ tab: t })
+      })),
+
+      leads: filtered.map((l, i) => {
+        const st = STATUS[l.status];
+        return {
+          company: l.company, initials: l.initials, contact: l.contact, role: l.role, meta: l.meta,
+          isNew: l.isNew, status: l.status, statusColor: st.color, statusBorder: st.border, statusBg: st.bg,
+          logoBg: LOGO_BG[i % LOGO_BG.length], ring: ring(l.score),
+          pad: dense ? "9px" : "14px",
+          rowBg: this.state.selected === l.id ? "rgba(103,232,249,0.07)" : "transparent",
+          select: () => this.setState({ selected: l.id })
+        };
+      }),
+
+      chart: areaChart(),
+      timeline: TIMELINE,
+
+      detail: sel ? {
+        company: sel.company, initials: sel.initials, meta: sel.meta, score: sel.score, fit: sel.fit,
+        scoreColor: sel.score >= 85 ? "#67E8F9" : sel.score >= 75 ? "#A5B4FC" : "#C084FC",
+        summary: sel.summary, signals: sel.signals, contact: sel.contact, role: sel.role,
+        email: sel.email, phone: sel.phone,
+        logoBg: LOGO_BG[LEADS.indexOf(sel) % LOGO_BG.length]
+      } : null,
+      closeDetail: () => this.setState({ selected: null })
+    };
+  }
+}
+
+</script>
+</body>
+</html>
