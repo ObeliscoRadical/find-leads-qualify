@@ -87,7 +87,7 @@ export function getMetaOAuthUrl(state: string) {
 }
 
 export function getMetaScopes() {
-  return ['pages_show_list', 'pages_read_engagement', 'instagram_basic']
+  return ['pages_show_list']
 }
 
 export async function exchangeCodeForLongLivedToken(code: string): Promise<MetaTokenInfo> {
