@@ -94,7 +94,7 @@ export function getMetaSettingsUrl(status: string) {
 }
 
 export function getMetaScopes() {
-  return ['pages_show_list', 'instagram_basic']
+  return ['pages_show_list', 'instagram_basic', 'business_management', 'pages_read_engagement']
 }
 
 export async function exchangeCodeForLongLivedToken(code: string): Promise<MetaTokenInfo> {
