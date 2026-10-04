@@ -136,6 +136,7 @@ export async function listEligibleInstagramPages(userAccessToken: string): Promi
   url.searchParams.set('limit', '100')
 
   const pages = await fetchGraph(url, pagesResponseSchema)
+  console.info('Meta page discovery', { pages: pages.data.length, linkedInstagram: pages.data.filter(page => page.instagram_business_account || page.connected_instagram_account).length })
   return pages.data.flatMap((page) => {
     const instagram = page.instagram_business_account || page.connected_instagram_account
     if (!instagram?.id) return []
