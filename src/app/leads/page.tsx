@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 
 type Lead = {
   id: string
+  contactName: string | null
+  contactPhone: string | null
   instagramUsername: string | null
   instagramDisplayName: string | null
   contactEmail: string | null
@@ -197,8 +199,8 @@ export default function LeadsPage() {
               {leads.map((lead) => (
                 <article key={lead.id} className="lead-row">
                   <div>
-                    <strong>{lead.instagramDisplayName || lead.instagramUsername || lead.contactEmail || 'Lead sem nome'}</strong>
-                    <span>{lead.website || lead.contactWhatsapp || lead.contactEmail || lead.sourceType}</span>
+                    <strong>{lead.contactName || lead.instagramDisplayName || lead.instagramUsername || lead.contactEmail || 'Lead sem nome'}</strong>
+                    <span>{lead.website || lead.contactPhone || lead.contactWhatsapp || lead.contactEmail || lead.sourceType}</span>
                   </div>
                   <div className="lead-row-meta">
                     <span className="status-pill">{statusLabels[lead.leadStatus]}</span>

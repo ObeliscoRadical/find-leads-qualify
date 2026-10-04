@@ -8,6 +8,13 @@
       "when": 1789578026536,
       "tag": "0000_productive_chronomancer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791151685901,
+      "tag": "0001_optimal_maginty",
+      "breakpoints": true
     }
   ]
 }

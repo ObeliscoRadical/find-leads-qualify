@@ -264,6 +264,8 @@ export async function getLeads(organizationId: string, filters: LeadFilters = {}
     const s = `%${filters.search.trim()}%`
     conditions.push(
       or(
+        ilike(leads.contactName, s),
+        ilike(leads.contactPhone, s),
         ilike(leads.instagramUsername, s),
         ilike(leads.instagramDisplayName, s),
         ilike(leads.instagramBio, s),
@@ -633,7 +635,7 @@ export async function getLeadDashboardData(organizationId: string, userId: strin
 
   const qualifiedStatuses = new Set(['qualified', 'replied', 'closed'])
   const leadsForDashboard = leadRows.map<LeadDashboardLead>((lead) => {
-    const company = lead.instagramDisplayName || lead.instagramUsername || lead.website || lead.contactEmail || 'Lead sem nome'
+    const company = lead.contactName || lead.instagramDisplayName || lead.instagramUsername || lead.website || lead.contactEmail || 'Lead sem nome'
     const score = scoreToPercent(lead.icpMatchScore)
     const meta = [lead.instagramCategory, lead.icpSegment, lead.website].filter(Boolean).join(' · ') || lead.sourceType
     return {
@@ -650,7 +652,7 @@ export async function getLeadDashboardData(organizationId: string, userId: strin
       signals: [lead.instagramIsBusiness ? 'Perfil profissional' : null, lead.instagramFollowers ? `${lead.instagramFollowers} seguidores` : null, lead.instagramCategory, lead.sourceType].filter(Boolean) as string[],
       summary: lead.instagramBio || lead.icpSegment || 'Sem resumo registrado para este lead.',
       email: lead.contactEmail || 'Por definir',
-      phone: lead.contactWhatsapp || 'Por definir',
+      phone: lead.contactPhone || lead.contactWhatsapp || 'Por definir',
     }
   })
 

@@ -111,6 +111,10 @@ export const leads = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     sourceType: varchar('source_type', { length: 50 }).notNull(), // 'instagram_api', 'google_places', 'referral'
+    sourceExternalId: varchar('source_external_id', { length: 255 }),
+    contactName: varchar('contact_name', { length: 255 }),
+    contactPhone: varchar('contact_phone', { length: 50 }),
+    sourceFields: text('source_fields'),
     leadType: varchar('lead_type', { length: 50 }).notNull().default('customer'), // 'customer', 'affiliate'
     instagramId: varchar('instagram_id', { length: 255 }),
     instagramUsername: varchar('instagram_username', { length: 255 }),
@@ -134,6 +138,7 @@ export const leads = pgTable(
   },
   (table) => ({
     orgIdx: index('idx_leads_org').on(table.organizationId),
+    sourceExternalIdx: uniqueIndex('idx_leads_source_external').on(table.organizationId, table.sourceType, table.sourceExternalId),
     statusIdx: index('idx_leads_status').on(table.leadStatus),
     instagramIdIdx: uniqueIndex('idx_leads_instagram_id').on(table.instagramId, table.organizationId).where(sql`${table.instagramId} IS NOT NULL`),
   })

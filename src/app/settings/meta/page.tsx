@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 type StatusResponse = {
   status: 'disconnected' | 'pending_selection' | 'connected' | string
+  captureReady?: boolean
   connection: {
     pageId: string | null
     pageName: string | null
@@ -47,6 +48,12 @@ export default function MetaSettingsPage() {
       return
     }
     setStatus(body)
+    if (body.status !== 'connected') {
+      const outcome = new URLSearchParams(window.location.search).get('meta')
+      if (outcome === 'no_pages') setMessage('A Meta não retornou nenhuma Página com Instagram profissional associado. Confira as contas selecionadas e volte a ligar.')
+      else if (outcome === 'expired') setMessage('A autorização expirou. Clique em Ligar Meta para tentar novamente.')
+      else if (outcome === 'provider_error') setMessage('Não foi possível consultar a Meta. Confira o acesso às contas e tente novamente.')
+    }
   }
 
   async function loadPages() {
@@ -76,6 +83,17 @@ export default function MetaSettingsPage() {
     }
     setMessage('Página Meta ligada com sucesso.')
     await loadStatus()
+  }
+
+  async function activateCapture() {
+    setActionLoading(true)
+    setMessage('')
+    try {
+      const response = await fetch('/api/meta/capture', { method: 'POST' })
+      const body = await response.json()
+      setMessage(response.ok ? `Captação ativada. ${body.imported} leads importados; ${body.existing} já existiam.${body.moreAvailable ? ' Há mais registros históricos na Meta além deste lote.' : ''}` : body.error)
+    } catch { setMessage('Não foi possível ativar a captação. Tente novamente.') }
+    finally { setActionLoading(false) }
   }
 
   async function disconnect() {
@@ -145,6 +163,19 @@ export default function MetaSettingsPage() {
             </a>
           </div>
         )}
+
+        {status?.status === 'connected' ? (
+          <section>
+            <h2>Leads de formulários Meta</h2>
+            <p>Receba automaticamente os contatos enviados aos formulários da sua Página. A ativação também importa até 100 contatos por formulário, de até 50 formulários, sem duplicar leads.</p>
+            {status.captureReady ? (
+              <button className="primary-button" onClick={activateCapture} disabled={actionLoading}>
+                {actionLoading ? 'A ativar...' : 'Ativar captação e importar formulários'}
+              </button>
+            ) : <><p>A captação aguarda configuração e autorização de acesso aos formulários na Meta.</p><a className="primary-button" href="/api/meta/oauth/connect?capture=1">Autorizar acesso aos formulários</a></>}
+            <p><a href="/leads">Ver leads recebidos</a></p>
+          </section>
+        ) : null}
 
         {status?.status === 'connected' || status?.status === 'pending_selection' ? (
           <div className="settings-actions">

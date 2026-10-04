@@ -1,3 +1,5 @@
+import { getEnv } from '@/lib/env'
+import { hasCaptureScopes } from '@/lib/meta/lead-capture'
 import { jsonError } from '@/lib/api'
 import { getMetaConnection } from '@/db/queries'
 import { requireAuth } from '@/lib/api-auth'
@@ -19,6 +21,7 @@ export async function GET(request: Request) {
 
   return Response.json({
     status: connection.status,
+    captureReady: hasCaptureScopes(connection.scopes) && getEnv().META_CAPTURE_ENABLED === 'true',
     connection: {
       pageId: connection.pageId,
       pageName: connection.pageName,

@@ -6,6 +6,8 @@ type LeadStatus = 'new' | 'contacted' | 'replied' | 'qualified' | 'closed' | 'op
 
 type Lead = {
   id: string
+  contactName: string | null
+  contactPhone: string | null
   instagramUsername: string | null
   instagramDisplayName: string | null
   contactEmail: string | null
@@ -125,7 +127,7 @@ export default function KanbanPage() {
                     }}
                     onDragEnd={() => setDraggingId(null)}
                   >
-                    <strong>{lead.instagramDisplayName || lead.instagramUsername || lead.contactEmail || 'Lead sem nome'}</strong>
+                    <strong>{lead.contactName || lead.instagramDisplayName || lead.instagramUsername || lead.contactEmail || 'Lead sem nome'}</strong>
                     <span>{lead.website || lead.contactEmail || 'Sem contacto direto'}</span>
                     <div className="kanban-card-footer">
                       <small>{lead.icpMatchScore ? `${Math.round(Number(lead.icpMatchScore) * 100)}% ICP` : 'ICP por definir'}</small>

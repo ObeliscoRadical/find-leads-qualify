@@ -14,6 +14,8 @@ const envSchema = z.object({
   META_APP_SECRET: z.string().optional(),
   META_REDIRECT_URI: z.string().url().optional(),
   META_API_VERSION: z.string().default('v21.0'),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().min(32).optional(),
+  META_CAPTURE_ENABLED: z.enum(['true', 'false']).default('false'),
 
   // Google OAuth
   GOOGLE_CLIENT_ID: z.string().optional(),
@@ -91,4 +93,3 @@ export function getOpenAIEnv() {
     OPENAI_BUDGET_USD: env.OPENAI_BUDGET_USD,
   }
 }
-

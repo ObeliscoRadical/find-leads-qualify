@@ -18,8 +18,8 @@ describe('Meta OAuth URLs', () => {
   })
 
   it('requests Page listing and basic Instagram access with the original state', () => {
-    const url = getMetaOAuthUrl('fresh-state')
-    expect(url.searchParams.get('scope')).toBe('pages_show_list,instagram_basic,business_management,pages_read_engagement')
+    const url = getMetaOAuthUrl('fresh-state', true)
+    expect(url.searchParams.get('scope')).toBe('pages_show_list,instagram_basic,business_management,pages_read_engagement,leads_retrieval,pages_manage_metadata,pages_manage_ads')
     expect(url.searchParams.get('state')).toBe('fresh-state')
     expect(url.searchParams.get('redirect_uri')).toBe('https://find-leads-qualify.onrender.com/api/meta/oauth/callback')
   })

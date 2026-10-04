@@ -24,5 +24,5 @@ export async function GET(request: Request) {
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   })
 
-  return NextResponse.redirect(getMetaOAuthUrl(state), { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
+  return NextResponse.redirect(getMetaOAuthUrl(state, new URL(request.url).searchParams.get('capture') === '1'), { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }
