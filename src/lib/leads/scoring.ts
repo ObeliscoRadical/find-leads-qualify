@@ -1,3 +1,7 @@
+import { calculateICPScore as calculateICPScoreV2, type ScoringInput as ScoringInputV2, type ScoringResult, type CompanyICPProfile, DEFAULT_ICP_PROFILE } from './scoring-v2'
+
+// ============ Legacy Interface (backward compatible) ============
+
 export interface ScoringInput {
   companyNiche?: string | null
   companyDescription?: string | null
@@ -7,47 +11,43 @@ export interface ScoringInput {
   leadIsBusiness?: boolean | null
 }
 
+/**
+ * Legacy scoring function - kept for backward compatibility.
+ * Delegates to v2 with a default profile built from niche/description.
+ * @deprecated Use calculateICPScoreV2 with a full CompanyICPProfile
+ */
 export function calculateICPScore(input: ScoringInput): number {
-  let score = 0.5 // Baseline score
-
-  const nicheWords = (input.companyNiche || '')
-    .toLowerCase()
-    .split(/[\s,]+/)
-    .filter((w) => w.length > 2)
-  const descWords = (input.companyDescription || '')
-    .toLowerCase()
-    .split(/[\s,]+/)
-    .filter((w) => w.length > 3)
-
-  const targetWords = Array.from(new Set([...nicheWords, ...descWords]))
-
-  const leadText = `${input.leadBio || ''} ${input.leadCategory || ''}`.toLowerCase()
-
-  if (targetWords.length > 0 && leadText) {
-    let matches = 0
-    for (const word of targetWords) {
-      if (leadText.includes(word)) {
-        matches++
-      }
-    }
-    const matchRatio = matches / targetWords.length
-    score += matchRatio * 0.3
+  const profile: CompanyICPProfile = {
+    ...DEFAULT_ICP_PROFILE,
+    organizationId: 'legacy',
+    name: 'Legacy Profile',
+    keywords: extractLegacyKeywords(input.companyNiche, input.companyDescription),
   }
 
-  // Adjust for business profile
-  if (input.leadIsBusiness) {
-    score += 0.1
-  }
+  const result = calculateICPScoreV2({
+    companyProfile: profile,
+    leadBio: input.leadBio,
+    leadCategory: input.leadCategory,
+    leadFollowers: input.leadFollowers,
+    leadIsBusiness: input.leadIsBusiness,
+  })
 
-  // Adjust for follower count (micro to mid-tier targets)
-  if (input.leadFollowers) {
-    if (input.leadFollowers >= 500 && input.leadFollowers <= 50000) {
-      score += 0.1
-    } else if (input.leadFollowers > 50000) {
-      score += 0.05
-    }
-  }
-
-  // Clamp between 0.00 and 1.00
-  return Math.min(Math.max(Number(score.toFixed(2)), 0), 1)
+  return result.score
 }
+
+// ============ Helpers ============
+
+function extractLegacyKeywords(niche?: string | null, description?: string | null): string[] {
+  const text = `${niche || ''} ${description || ''}`
+  return Array.from(new Set(
+    text
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .filter(w => w.length > 2)
+  ))
+}
+
+// ============ Re-exports for v2 ============
+
+export type { ScoringResult, CompanyICPProfile, ScoringInputV2 }
+export { calculateICPScoreV2, DEFAULT_ICP_PROFILE, buildICPProfileFromOnboarding, updateICPProfile } from './scoring-v2'

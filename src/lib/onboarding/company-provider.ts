@@ -91,7 +91,7 @@ export function getCompanyLookupProvider(): CompanyLookupProvider {
   return new ViesCompanyProvider()
 }
 
-function normalizeVatNumber(value: string | undefined) {
+export function normalizeVatNumber(value: string | undefined) {
   const normalized = value?.replace(/^PT/i, '').replace(/\D/g, '') || ''
   return /^\d{9}$/.test(normalized) ? normalized : null
 }

@@ -1,7 +1,8 @@
 import { createMessage, getLeadById, getLeadMessages } from '@/db/queries'
 import { jsonError, parseJson } from '@/lib/api'
-import { requireProxyAuth } from '@/lib/api-auth'
+import { requireAuth } from '@/lib/api-auth'
 import { messagePayloadSchema } from '../../schemas'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -10,7 +11,10 @@ type RouteContext = {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const auth = await requireProxyAuth(request)
+  const { response, result } = applyRateLimit(request, limiters.leadsList, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const { id } = await context.params
@@ -18,11 +22,14 @@ export async function GET(request: Request, context: RouteContext) {
   if (!lead) return jsonError('Lead não encontrado.', 404)
 
   const messages = await getLeadMessages(auth.session.organizationId, id)
-  return Response.json({ messages })
+  return Response.json({ messages }, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireProxyAuth(request)
+  const { response, result } = applyRateLimit(request, limiters.leadsCreate, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const parsed = await parseJson(request, messagePayloadSchema)
@@ -38,5 +45,5 @@ export async function POST(request: Request, context: RouteContext) {
     leadId: id,
   })
 
-  return Response.json({ message }, { status: 201 })
+  return Response.json({ message }, { status: 201, headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }

@@ -1,13 +1,17 @@
 import { jsonError } from '@/lib/api'
 import { decrypt } from '@/lib/encryption'
 import { getMetaConnection } from '@/db/queries'
-import { requireCurrentMembership } from '@/lib/meta/authz'
+import { requireAuth } from '@/lib/api-auth'
 import { listEligibleInstagramPages, MetaProviderError } from '@/lib/meta/client'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
-  const auth = await requireCurrentMembership()
+export async function GET(request: Request) {
+  const { response, result } = applyRateLimit(request, limiters.apiDefault, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const connection = await getMetaConnection(auth.session.organizationId)
@@ -24,7 +28,7 @@ export async function GET() {
         igUserId: page.igUserId,
         igUsername: page.igUsername,
       })),
-    })
+    }, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
   } catch (error) {
     if (error instanceof MetaProviderError) return jsonError('Não foi possível obter páginas da Meta.', error.status)
     throw error

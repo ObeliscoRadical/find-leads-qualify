@@ -2,8 +2,9 @@ import { z } from 'zod'
 import { jsonError, parseJson } from '@/lib/api'
 import { decrypt, encrypt } from '@/lib/encryption'
 import { getMetaConnection, upsertMetaConnection } from '@/db/queries'
-import { requireCurrentMembership } from '@/lib/meta/authz'
+import { requireAuth } from '@/lib/api-auth'
 import { listEligibleInstagramPages, MetaProviderError } from '@/lib/meta/client'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -12,7 +13,10 @@ const selectSchema = z.object({
 })
 
 export async function POST(request: Request) {
-  const auth = await requireCurrentMembership()
+  const { response, result } = applyRateLimit(request, limiters.metaOAuth, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const parsed = await parseJson(request, selectSchema)
@@ -50,7 +54,7 @@ export async function POST(request: Request) {
         igUserId: updated.igUserId,
         igUsername: updated.igUsername,
       },
-    })
+    }, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
   } catch (error) {
     if (error instanceof MetaProviderError) return jsonError('Não foi possível validar a página na Meta.', error.status)
     throw error

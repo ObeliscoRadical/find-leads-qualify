@@ -1,25 +1,34 @@
 import { createLead, getLeads } from '@/db/queries'
 import { jsonError, parseJson } from '@/lib/api'
-import { requireProxyAuth } from '@/lib/api-auth'
+import { requireAuth } from '@/lib/api-auth'
 import { calculateICPScore } from '@/lib/leads/scoring'
 import { leadListQuerySchema, leadPayloadSchema } from './schemas'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
-  const auth = await requireProxyAuth(request)
+  // Rate limiting
+  const { response, result } = applyRateLimit(request, limiters.leadsList, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const url = new URL(request.url)
   const parsed = leadListQuerySchema.safeParse(Object.fromEntries(url.searchParams))
   if (!parsed.success) return jsonError('Filtros inválidos.', 422, parsed.error.flatten())
 
-  const result = await getLeads(auth.session.organizationId, parsed.data)
-  return Response.json(result)
+  const result_data = await getLeads(auth.session.organizationId, parsed.data)
+  return Response.json(result_data, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProxyAuth(request)
+  // Rate limiting
+  const { response, result } = applyRateLimit(request, limiters.leadsCreate, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const parsed = await parseJson(request, leadPayloadSchema)
@@ -41,13 +50,18 @@ export async function POST(request: Request) {
       icpMatchScore: score,
     })
 
-    return Response.json({ lead }, { status: 201 })
+    return Response.json({ lead }, { status: 201, headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
   } catch (error) {
     if (isUniqueViolation(error)) return jsonError('Este lead já existe nesta organização.', 409)
     throw error
   }
 }
 
-function isUniqueViolation(error: unknown) {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: string }).code === '23505'
+  )
 }

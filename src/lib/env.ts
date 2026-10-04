@@ -58,6 +58,14 @@ export function getEnv(): Env {
   return parsedEnv
 }
 
+/**
+ * Resets the cached environment - for testing only.
+ * Call this after modifying process.env in tests.
+ */
+export function resetEnvCache(): void {
+  parsedEnv = null
+}
+
 export function getMetaEnv() {
   const env = getEnv()
   if (!env.META_APP_ID || !env.META_APP_SECRET || !env.META_REDIRECT_URI) {

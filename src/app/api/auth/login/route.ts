@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AUTH_COOKIE_NAME, getAuthCookieOptions, signJwt, verifyPassword } from '@/lib/auth'
 import { jsonError, parseJson } from '@/lib/api'
 import { findUserByEmail, getUserDefaultOrganization } from '@/db/queries'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -12,6 +13,9 @@ const loginSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const { response, result } = applyRateLimit(request, limiters.auth, getClientIdentifier(request))
+  if (response) return response
+
   const parsed = await parseJson(request, loginSchema)
   if (parsed.error) return parsed.error
 
@@ -38,5 +42,6 @@ export async function POST(request: Request) {
     organization: membership.organization,
   })
   response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions())
+  response.headers.set('X-RateLimit-Remaining', String(result.remaining))
   return response
 }

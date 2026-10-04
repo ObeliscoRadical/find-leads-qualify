@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createOauthState, deleteExpiredOauthStates } from '@/db/queries'
-import { requireCurrentMembership } from '@/lib/meta/authz'
+import { requireAuth } from '@/lib/api-auth'
 import { getMetaOAuthUrl } from '@/lib/meta/client'
 import { jsonError } from '@/lib/api'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
-  const auth = await requireCurrentMembership()
+export async function GET(request: Request) {
+  const { response, result } = applyRateLimit(request, limiters.metaOAuth, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   await deleteExpiredOauthStates()
@@ -20,5 +24,5 @@ export async function GET() {
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   })
 
-  return NextResponse.redirect(getMetaOAuthUrl(state))
+  return NextResponse.redirect(getMetaOAuthUrl(state), { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }

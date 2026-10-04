@@ -1,12 +1,16 @@
 import { getPrivacyPolicy, savePrivacyPolicy } from '@/db/queries'
 import { jsonError } from '@/lib/api'
-import { requireProxyAuth } from '@/lib/api-auth'
+import { requireAuth } from '@/lib/api-auth'
 import { generatePrivacyPolicyPt } from '@/lib/privacy/policy'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
-  const auth = await requireProxyAuth(request)
+  const { response, result } = applyRateLimit(request, limiters.apiDefault, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const policy = await getPrivacyPolicy(auth.session.organizationId)
@@ -24,11 +28,14 @@ export async function GET(request: Request) {
       description: auth.organization.description,
       timezone: auth.organization.timezone,
     },
-  })
+  }, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProxyAuth(request)
+  const { response, result } = applyRateLimit(request, limiters.apiDefault, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.', 401)
 
   const content = generatePrivacyPolicyPt(auth.organization)
@@ -37,5 +44,5 @@ export async function POST(request: Request) {
     content,
   })
 
-  return Response.json({ policy })
+  return Response.json({ policy }, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }

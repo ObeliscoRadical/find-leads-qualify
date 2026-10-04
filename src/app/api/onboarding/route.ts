@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { jsonError, parseJson } from '@/lib/api'
-import { getCurrentSession } from '@/lib/auth'
+import { requireAuth } from '@/lib/api-auth'
 import { updateOrganizationOnboarding } from '@/db/queries'
+import { limiters, applyRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -26,16 +27,19 @@ const onboardingSchema = z.discriminatedUnion('path', [
 ])
 
 export async function POST(request: Request) {
-  const session = await getCurrentSession()
-  if (!session) return jsonError('Não autorizado.', 401)
+  const { response, result } = applyRateLimit(request, limiters.apiDefault, getClientIdentifier(request))
+  if (response) return response
+
+  const auth = await requireAuth(request)
+  if (!auth) return jsonError('Não autorizado.', 401)
 
   const parsed = await parseJson(request, onboardingSchema)
   if (parsed.error) return parsed.error
 
   const payload = parsed.data
   const organization = await updateOrganizationOnboarding({
-    organizationId: session.organizationId,
-    userId: session.userId,
+    organizationId: auth.session.organizationId,
+    userId: auth.session.userId,
     name: 'organizationName' in payload ? payload.organizationName : undefined,
     nif: 'nif' in payload ? payload.nif : null,
     cae: 'cae' in payload ? payload.cae || null : null,
@@ -44,5 +48,5 @@ export async function POST(request: Request) {
   })
 
   if (!organization) return jsonError('Organização não encontrada.', 404)
-  return Response.json({ organization })
+  return Response.json({ organization }, { headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }
