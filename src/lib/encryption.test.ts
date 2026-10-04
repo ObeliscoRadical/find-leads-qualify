@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import crypto from 'node:crypto'
 import { resetEncryptionCache } from '@/lib/encryption'
 
 describe('Encryption (AES-256-GCM + PBKDF2)', () => {
@@ -6,7 +7,7 @@ describe('Encryption (AES-256-GCM + PBKDF2)', () => {
     resetEncryptionCache()
     // Set required env vars for all tests
     process.env.ENCRYPTION_KEY = 'test-encryption-key-minimum-32-chars-long'
-    process.env.NODE_ENV = 'test'
+    vi.stubEnv('NODE_ENV', 'test')
     delete process.env.ENCRYPTION_SALT
   })
 
@@ -15,7 +16,7 @@ describe('Encryption (AES-256-GCM + PBKDF2)', () => {
     vi.resetModules()
     resetEncryptionCache()
     process.env.ENCRYPTION_KEY = 'test-encryption-key-minimum-32-chars-long'
-    process.env.NODE_ENV = 'test'
+    vi.stubEnv('NODE_ENV', 'test')
     delete process.env.ENCRYPTION_SALT
     const mod = await import('@/lib/encryption')
     return { encrypt: mod.encrypt, decrypt: mod.decrypt }
@@ -74,8 +75,35 @@ describe('Encryption (AES-256-GCM + PBKDF2)', () => {
     expect(() => decrypt('a:b:c:d:e')).toThrow(/Invalid ciphertext format/)
   })
 
-  // Note: ENCRYPTION_SALT tests are skipped due to module caching complexity in test environment
-  // The core encryption/decryption functionality is fully tested above
+  it('decrypts tokens encrypted by the previous production version', async () => {
+    const { decrypt } = await getMod()
+    const key = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY!).digest()
+    const iv = crypto.randomBytes(16)
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+    const encrypted = cipher.update('existing-meta-token', 'utf8', 'hex') + cipher.final('hex')
+    const legacy = `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${encrypted}`
+    expect(decrypt(legacy)).toBe('existing-meta-token')
+  })
+
+  it('uses a configured salt and decrypts after restarting', async () => {
+    const { encrypt } = await getMod()
+    process.env.ENCRYPTION_SALT = 'a'.repeat(32)
+    const mod = await import('@/lib/encryption')
+    mod.resetEncryptionCache()
+    const ciphertext = encrypt('persistent-token')
+    expect(ciphertext.split(':')[0]).toBe('a'.repeat(32))
+    delete process.env.ENCRYPTION_SALT
+    mod.resetEncryptionCache()
+    expect(mod.decrypt(ciphertext)).toBe('persistent-token')
+  })
+
+  it('rejects a salt that has the wrong length', async () => {
+    const { encrypt } = await getMod()
+    process.env.ENCRYPTION_SALT = 'a'.repeat(64)
+    const mod = await import('@/lib/encryption')
+    mod.resetEncryptionCache()
+    expect(() => encrypt('token')).toThrow()
+  })
 
   it('long plaintext (10KB)', async () => {
     const { encrypt, decrypt } = await getMod()

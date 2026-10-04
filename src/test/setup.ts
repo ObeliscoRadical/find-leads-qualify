@@ -1,5 +1,5 @@
 // Vitest setup file - runs before all tests
-import { vi } from 'vitest'
+import { vi, beforeEach } from 'vitest'
 
 // Mock environment variables for all tests
 vi.stubEnv('DATABASE_URL', 'postgresql://test:test@localhost:5432/test')

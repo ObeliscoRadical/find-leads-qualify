@@ -7,6 +7,7 @@ const envSchema = z.object({
   // Auth
   JWT_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(32),
+  ENCRYPTION_SALT: z.string().regex(/^[a-fA-F0-9]{32}$/).optional(),
 
   // Meta API (Optional for core boot, required when Meta operations are invoked)
   META_APP_ID: z.string().optional(),

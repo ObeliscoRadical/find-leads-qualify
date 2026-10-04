@@ -15,8 +15,8 @@ const registerSchema = z.object({
 })
 
 export async function POST(request: Request) {
-  const { response, result } = applyRateLimit(request, limiters.auth, getClientIdentifier(request))
-  if (response) return response
+  const { response: rateLimitResponse, result: rateLimitResult } = applyRateLimit(request, limiters.auth, getClientIdentifier(request))
+  if (rateLimitResponse) return rateLimitResponse
 
   const parsed = await parseJson(request, registerSchema)
   if (parsed.error) return parsed.error
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     organization,
   })
   response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions())
-  response.headers.set('X-RateLimit-Remaining', String(result.remaining))
+  response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
   return response
 }
 

@@ -75,6 +75,19 @@ describe('Rate Limiter', () => {
   })
 
   describe('applyRateLimit', () => {
+    it('reports the configured limit without invoking the limiter again', () => {
+      const limiter = vi.fn(createRateLimiter({ maxRequests: 2, keyPrefix: 'headers' }))
+      const request = new Request('http://localhost')
+      const first = applyRateLimit(request, limiter, 'user')
+      const second = applyRateLimit(request, limiter, 'user')
+      const blocked = applyRateLimit(request, limiter, 'user')
+      expect(limiter).toHaveBeenCalledTimes(3)
+      expect(first.headers.get('X-RateLimit-Limit')).toBe('2')
+      expect(second.result.remaining).toBe(0)
+      expect(blocked.response?.status).toBe(429)
+      expect(blocked.headers.get('X-RateLimit-Limit')).toBe('2')
+    })
+
     it('returns response when blocked', () => {
       const limiter = createRateLimiter({ windowMs: 60_000, maxRequests: 1, keyPrefix: 'test' })
       const request = new Request('http://localhost', { headers: { 'x-forwarded-for': '1.1.1.1' } })

@@ -50,4 +50,4 @@ function extractLegacyKeywords(niche?: string | null, description?: string | nul
 // ============ Re-exports for v2 ============
 
 export type { ScoringResult, CompanyICPProfile, ScoringInputV2 }
-export { calculateICPScoreV2, DEFAULT_ICP_PROFILE, buildICPProfileFromOnboarding, updateICPProfile } from './scoring-v2'
+export { calculateICPScore as calculateICPScoreV2, DEFAULT_ICP_PROFILE, buildICPProfileFromOnboarding, updateICPProfile } from './scoring-v2'

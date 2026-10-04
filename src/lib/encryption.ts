@@ -4,7 +4,7 @@ import { getEnv, resetEnvCache } from '@/lib/env'
 const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 16 // 128 bits
 const AUTH_TAG_LENGTH = 16 // 128 bits
-const PBKDF2_ITERATIONS = 100_000 // OWASP 2024 recommendation
+const PBKDF2_ITERATIONS = 100_000
 const KEY_LENGTH = 32 // 256 bits
 const SALT_LENGTH = 16
 
@@ -23,8 +23,8 @@ export function resetEncryptionCache(): void {
 
 /**
  * Derive encryption key using PBKDF2 with a stored salt.
- * Salt is generated once on first run and persisted in ENCRYPTION_SALT env var.
- * If ENCRYPTION_SALT is not set, a random salt is generated and logged (dev only).
+ * Uses ENCRYPTION_SALT when configured; otherwise generates a salt per process.
+ * Every ciphertext stores its salt, so it remains readable after restarts.
  */
 function getKey(): Buffer {
   if (cachedKey) return cachedKey
@@ -77,25 +77,33 @@ export function encrypt(plaintext: string): string {
 
 /**
  * Decrypts a ciphertext string produced by `encrypt`.
- * Expects format: `saltHex:ivHex:authTagHex:encryptedHex`
+ * Accepts PBKDF2 `saltHex:ivHex:authTagHex:encryptedHex` and legacy SHA-256
+ * `ivHex:authTagHex:encryptedHex` tokens from the previous production version.
  * Verifies auth tag (integrity + authenticity).
  */
 export function decrypt(ciphertext: string): string {
   if (!ciphertext) return ''
 
   const parts = ciphertext.split(':')
-  if (parts.length !== 4) {
+  if (parts.length !== 3 && parts.length !== 4) {
     throw new Error('Invalid ciphertext format (expected salt:iv:authTag:encrypted)')
   }
 
-  const [saltHex, ivHex, authTagHex, encryptedHex] = parts
+  const legacy = parts.length === 3
+  const [saltHex, ivHex, authTagHex, encryptedHex] = legacy ? ['', ...parts] : parts
+  if (!/^[a-fA-F0-9]{32}$/.test(ivHex) || !/^[a-fA-F0-9]{32}$/.test(authTagHex) ||
+      (!legacy && !/^[a-fA-F0-9]{32}$/.test(saltHex)) || !/^(?:[a-fA-F0-9]{2})*$/.test(encryptedHex)) {
+    throw new Error('Invalid ciphertext format')
+  }
   const salt = Buffer.from(saltHex, 'hex')
   const iv = Buffer.from(ivHex, 'hex')
   const authTag = Buffer.from(authTagHex, 'hex')
 
   // Re-derive key with the salt from ciphertext
   const env = getEnv()
-  const key = crypto.pbkdf2Sync(env.ENCRYPTION_KEY, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256')
+  const key = legacy
+    ? crypto.createHash('sha256').update(env.ENCRYPTION_KEY).digest()
+    : crypto.pbkdf2Sync(env.ENCRYPTION_KEY, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256')
 
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
     authTagLength: AUTH_TAG_LENGTH,

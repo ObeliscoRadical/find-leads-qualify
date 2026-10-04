@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import jwt from 'jsonwebtoken'
 import { resetEnvCache } from '@/lib/env'
 import { hashPassword, verifyPassword, signJwt, verifyJwt, getAuthCookieOptions, type TokenPayload } from '@/lib/auth'
 
@@ -77,7 +78,6 @@ describe('Auth utilities', () => {
     })
 
     it('rejects token with invalid payload structure', () => {
-      const jwt = require('jsonwebtoken')
       const token = jwt.sign({ userId: 'only' }, process.env.JWT_SECRET!)
       const verified = verifyJwt(token)
       expect(verified).toBeNull()

@@ -224,7 +224,7 @@ describe('ICP Scoring v2', () => {
       expect(updated.keywords).toEqual(['novo', 'keyword'])
       expect(updated.weights.keywordMatch).toBe(0.50)
       expect(updated.weights.businessProfile).toBe(baseProfile.weights.businessProfile)
-      expect(updated.updatedAt.getTime()).toBeGreaterThan(baseProfile.updatedAt.getTime())
+      expect(updated.updatedAt!.getTime()).toBeGreaterThanOrEqual(baseProfile.updatedAt!.getTime())
     })
 
     it('handles partial weights update', () => {

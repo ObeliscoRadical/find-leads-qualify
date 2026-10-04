@@ -1,5 +1,3 @@
-import { getEnv } from '@/lib/env'
-
 interface RateLimitEntry {
   count: number
   resetAt: number
@@ -22,6 +20,7 @@ export interface RateLimitConfig {
 
 export interface RateLimitResult {
   allowed: boolean
+  limit: number
   remaining: number
   resetAt: number
   retryAfterMs?: number
@@ -48,12 +47,13 @@ export function createRateLimiter(config: Partial<RateLimitConfig> = {}) {
     if (!entry || now > entry.resetAt) {
       // First request or window expired
       memoryStore.set(key, { count: 1, resetAt: now + windowMs })
-      return { allowed: true, remaining: maxRequests - 1, resetAt: now + windowMs }
+      return { allowed: true, limit: maxRequests, remaining: maxRequests - 1, resetAt: now + windowMs }
     }
 
     if (entry.count >= maxRequests) {
       return {
         allowed: false,
+        limit: maxRequests,
         remaining: 0,
         resetAt: entry.resetAt,
         retryAfterMs: entry.resetAt - now,
@@ -61,7 +61,7 @@ export function createRateLimiter(config: Partial<RateLimitConfig> = {}) {
     }
 
     entry.count += 1
-    return { allowed: true, remaining: maxRequests - entry.count, resetAt: entry.resetAt }
+    return { allowed: true, limit: maxRequests, remaining: maxRequests - entry.count, resetAt: entry.resetAt }
   }
 }
 
@@ -93,12 +93,12 @@ export function applyRateLimit(
   request: Request,
   limiter: (id: string) => RateLimitResult,
   identifier?: string
-): { response?: Response; result: RateLimitResult } {
+): { response?: Response; result: RateLimitResult; headers: Headers } {
   const id = identifier || getClientIdentifier(request)
   const result = limiter(id)
 
   const headers = new Headers({
-    'X-RateLimit-Limit': String(limiter({}).remaining + result.remaining + 1), // approximate
+    'X-RateLimit-Limit': String(result.limit),
     'X-RateLimit-Remaining': String(result.remaining),
     'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
   })
@@ -111,6 +111,7 @@ export function applyRateLimit(
         headers,
       }),
       result,
+      headers,
     }
   }
 

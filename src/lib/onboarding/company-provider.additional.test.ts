@@ -54,7 +54,7 @@ describe('Company Provider - Additional Tests', () => {
   describe('ViesCompanyProvider - timeout handling', () => {
     it('throws on fetch timeout', async () => {
       const provider = new ViesCompanyProvider(async () => {
-        await new Promise((_, reject) => setTimeout(() => reject(new DOMException('timeout', 'AbortError')), 10))
+        return new Promise<never>((_, reject) => setTimeout(() => reject(new DOMException('timeout', 'AbortError')), 10))
       }, 5)
       await expect(provider.lookup('501442600')).rejects.toThrow(CompanyLookupUnavailableError)
     })
@@ -70,7 +70,7 @@ describe('Company Provider - Additional Tests', () => {
       let abortCalled = false
       const provider = new ViesCompanyProvider(async (url, options) => {
         // Simulate slow response that gets aborted
-        await new Promise((_, reject) => {
+        return new Promise<never>((_, reject) => {
           const timeout = setTimeout(() => reject(new DOMException('Aborted', 'AbortError')), 50)
           options?.signal?.addEventListener('abort', () => {
             clearTimeout(timeout)
