@@ -86,6 +86,13 @@ export function getMetaOAuthUrl(state: string) {
   return url
 }
 
+// Render's internal request origin can be localhost; always return to the configured public origin.
+export function getMetaSettingsUrl(status: string) {
+  const url = new URL('/settings/meta', getMetaEnv().META_REDIRECT_URI)
+  url.searchParams.set('meta', status)
+  return url
+}
+
 export function getMetaScopes() {
   return ['pages_show_list', 'instagram_basic']
 }
