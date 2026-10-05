@@ -12,9 +12,20 @@ export function profileFromUrl(value) {
     return { username: parts[0].toLowerCase(), profileUrl: `https://www.instagram.com/${parts[0].toLowerCase()}/` }
   } catch { return null }
 }
+export function normalizeSearch(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() }
+const stopwords = new Set(['gestao', 'gestor', 'gestores', 'empresa', 'empresas', 'servico', 'servicos', 'para', 'portugal', 'lisboa', 'porto'])
+export function segmentMatches(text, keyword) {
+  const terms = normalizeSearch(keyword).split(/[^a-z0-9]+/).filter(word => word.length >= 4 && !stopwords.has(word))
+  if (!terms.length) return false
+  const normalized = normalizeSearch(text)
+  return terms.some(term => normalized.includes(term.slice(0, Math.max(5, term.length - 3))))
+}
+function cleanDisplayName(text, username) {
+  return String(text || '').split(/\n/).map(line => line.trim()).filter(line => line && normalizeSearch(line) !== normalizeSearch(username) && !/seguido|followed|seguir|follow/i.test(line)).join(' ').slice(0, 160) || username
+}
 export function uniqueProfiles(links) {
   const found = new Map()
-  for (const link of links) { const profile = profileFromUrl(link.href); if (profile && !found.has(profile.username)) found.set(profile.username, { ...profile, displayName: link.text?.trim().slice(0, 160) }) }
+  for (const link of links) { const profile = profileFromUrl(link.href); if (profile && !found.has(profile.username)) found.set(profile.username, { ...profile, displayName: cleanDisplayName(link.text, profile.username) }) }
   return [...found.values()]
 }
 export function splitKeywords(value) { return (Array.isArray(value) ? value : String(value || '').split(/[,;\n]+/)).map(item => String(item).trim()).filter(Boolean) }
@@ -32,7 +43,9 @@ export async function discover(page, job) {
   try {
   for (const keyword of keywords) {
     if (profiles.size >= job.limit) break
-    const query = [keyword, job.location].filter(Boolean).join(' ')
+    const query = normalizeSearch([keyword, job.location].filter(Boolean).join(' '))
+    if (!segmentMatches(keyword, keyword)) throw new Error('Informe um segmento específico, como condomínios ou imobiliárias, em vez de termos genéricos.')
+    job.assertActive?.()
     await page.goto('https://www.instagram.com/explore/', { waitUntil: 'domcontentloaded', timeout: 45000 })
     await guard(page)
     let input = page.getByRole('textbox', { name: /Entrada da pesquisa|Search input/i })
@@ -43,15 +56,24 @@ export async function discover(page, job) {
     }
     await input.waitFor({ state: 'visible', timeout: 15000 })
     await input.fill(query)
-    await delay(3500)
-    await guard(page)
     const sourceUrl = page.url()
-    const links = await page.locator('main a[href]').evaluateAll(nodes => nodes.map(a => ({ href: a.href, text: a.innerText })))
-    const candidates = uniqueProfiles(links)
+    let candidates = []
+    const deadline = Date.now() + 25000
+    while (Date.now() < deadline) {
+      job.assertActive?.()
+      await guard(page)
+      const links = await page.locator('main a[href]').evaluateAll(nodes => nodes.map(a => ({ href: a.href, text: a.innerText })))
+      candidates = uniqueProfiles(links).filter(candidate => segmentMatches(`${candidate.username} ${candidate.displayName}`, keyword))
+      if (candidates.length) break
+      const mainText = await page.locator('main').innerText()
+      if (/nenhum resultado|no results|nao encontramos|não encontramos/i.test(mainText)) break
+      await delay(1000)
+    }
     // Each candidate must be an actual profile shown in Instagram's search and opened successfully.
     for (const candidate of candidates) {
       if (profiles.size >= job.limit) break
       if (profiles.has(candidate.username)) continue
+      job.assertActive?.()
       await page.goto(candidate.profileUrl, { waitUntil: 'domcontentloaded', timeout: 45000 })
       await guard(page)
       const main = page.locator('main')
@@ -67,6 +89,7 @@ export async function discover(page, job) {
       if (/Sorry, this page isn't available|Esta página não está disponível|Esta conta é privada|This account is private/i.test(text)) continue
       // A rendered profile includes its username and a posts/followers header. No synthetic fallback.
       if (!profileText.toLowerCase().includes(candidate.username) || !/seguidores|followers/i.test(profileText)) continue
+      if (!segmentMatches(`${candidate.username} ${text}`, keyword)) continue
       profiles.set(candidate.username, { ...candidate, bio: text.slice(0, 1800), sourceUrl })
       await delay(2000)
     }
@@ -101,40 +124,65 @@ async function main() {
   }
   const page = await context.newPage()
   await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded' })
+  await delay(3000)
   console.log('Chrome dedicado aberto. Entre no Instagram nele; o worker só busca perfis e não envia mensagens.')
   if (loginOnly) {
     console.log('Login manual: mantenha esta janela aberta. Depois execute npm run discovery:worker para processar buscas.')
     await new Promise(resolve => context.on('close', resolve))
     return
   }
+  let connectedUsername
+  async function verifyAccount() {
+    if (connectedUsername) return
+    await guard(page)
+    const accountLink = page.getByRole('link', { name: /^Foto do perfil de |^Profile picture of /i }).first()
+    await accountLink.waitFor({ state: 'visible', timeout: 15000 })
+    const account = profileFromUrl(await accountLink.getAttribute('href'))
+    if (!account) throw new Error('Não foi possível identificar a conta conectada no Chrome. Abra a página inicial do Instagram.')
+    const expected = normalizeSearch(settings.expectedInstagramUsername || '').replace(/^@/, '')
+    if (expected && account.username !== expected) throw new Error('A conta conectada no Chrome não corresponde à conta configurada. Troque a conta manualmente antes de buscar.')
+    connectedUsername = account.username
+    console.log(`Instagram conectado: @${connectedUsername}`)
+  }
   const endpoint = new URL('/api/discovery/worker', settings.apiUrl)
   async function api(method, body) {
     const response = await fetch(endpoint, { method, headers: { Authorization: `Bearer ${settings.token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
-    if (!response.ok) throw new Error(`API de descoberta respondeu ${response.status}; confira a conexão do worker no aplicativo.`)
+    if (!response.ok) { const error = new Error(`API de descoberta respondeu ${response.status}; confira a conexão do worker no aplicativo.`); error.status = response.status; throw error }
     return response.json()
   }
   while (true) {
-    try { await guard(page) } catch (error) { console.log(error.message); await delay(10000); continue }
+    try { await guard(page); await verifyAccount() } catch (error) { console.log(error.message); await delay(10000); continue }
     let claimed
     let heartbeat
+    let heartbeatStopped = false
+    let heartbeatPromise = Promise.resolve()
+    let heartbeatPending = false
+    let leaseError
+    async function stopHeartbeat() { heartbeatStopped = true; if (heartbeat) clearInterval(heartbeat); await heartbeatPromise }
     try {
       const { job } = await api('GET')
       if (!job) { if (process.argv.includes('--once')) break; await delay(10000); continue }
       claimed = job
       heartbeat = setInterval(() => {
-        void api('PATCH', { jobId: job.id, claimToken: job.claimToken })
-          .catch(error => console.error(error.message))
+        if (heartbeatStopped || heartbeatPending) return
+        heartbeatPending = true
+        heartbeatPromise = api('PATCH', { jobId: job.id, claimToken: job.claimToken })
+          .catch(error => { if (error.status === 409) leaseError = error; if (!heartbeatStopped) console.error(error.message) })
+          .finally(() => { heartbeatPending = false })
       }, 30000)
       console.log('Busca de perfis reais iniciada no Instagram.')
-      const profiles = await discover(page, { ...job, limit: Math.min(Math.max(Number(job.limit) || 10, 1), 30) })
+      const profiles = await discover(page, { ...job, limit: Math.min(Math.max(Number(job.limit) || 10, 1), 30), assertActive: () => { if (leaseError) throw leaseError } })
+      await stopHeartbeat()
+      if (leaseError) throw leaseError
       const result = await api('POST', { jobId: job.id, claimToken: job.claimToken, profiles })
       if (!profiles.length) console.log('Instagram não mostrou perfis públicos verificáveis para esta busca. Ajuste os segmentos e a localização no aplicativo.')
       console.log(`Busca concluída: ${result.inserted ?? 0} novos perfis, ${result.existing ?? 0} já cadastrados.`)
     } catch (error) {
+      await stopHeartbeat()
       console.error(error.message)
-      if (claimed) { try { await api('POST', { jobId: claimed.id, claimToken: claimed.claimToken, profiles: error.profiles || [], error: String(error.message).slice(0, 500) }) } catch (reportError) { console.error(reportError.message) } }
+      if (claimed && !leaseError) { try { await api('POST', { jobId: claimed.id, claimToken: claimed.claimToken, profiles: error.profiles || [], error: String(error.message).slice(0, 500) }) } catch (reportError) { console.error(reportError.message) } }
     }
-    if (heartbeat) clearInterval(heartbeat)
+    await stopHeartbeat()
     if (process.argv.includes('--once')) break
     await delay(10000)
   }

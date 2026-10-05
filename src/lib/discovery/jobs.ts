@@ -4,6 +4,7 @@ import { jobs, leads } from '@/db/schema';
 import { calculateICPScore } from '@/lib/leads/scoring';
 import { z } from 'zod';
 import { discoverySchema, resultSchema } from './validation';
+import { segmentMatches, OUTSIDE_SEGMENT_REASON } from './segment';
 async function recoverExhausted(organizationId: string) {
     await getDb().update(jobs).set({ status: 'failed', finishedAt: new Date(), lastError: 'O Chrome perdeu a conexão após três tentativas. Inicie uma nova busca.' }).where(and(eq(jobs.organizationId, organizationId), eq(jobs.kind, 'discovery'), eq(jobs.status, 'running'), sql `${jobs.startedAt} < now()-interval '15 minutes'`, sql `COALESCE(${jobs.attempts},0)>=COALESCE(${jobs.maxAttempts},3)`));
 }
@@ -48,7 +49,9 @@ export async function finishDiscovery(organizationId: string, input: z.infer<typ
         const payload = JSON.parse(job.payload || '{}');
         if (payload.claimToken !== input.claimToken)
             return null;
-        const profiles = input.profiles.slice(0, payload.limit || 10);
+        const received = input.profiles.slice(0, payload.limit || 10);
+        const profiles = received.filter(profile => segmentMatches(`${profile.username} ${profile.displayName || ''} ${profile.bio || ''}`, payload.keywords || ''));
+        const rejected = received.length - profiles.length;
         let inserted = 0;
         for (const profile of profiles) {
             const existing = await tx.select({ id: leads.id }).from(leads).where(and(eq(leads.organizationId, organizationId), sql `lower(${leads.instagramUsername})=${profile.username}`)).limit(1);
@@ -57,9 +60,10 @@ export async function finishDiscovery(organizationId: string, input: z.infer<typ
             const result = await tx.insert(leads).values({ id: `lead_${crypto.randomUUID().replace(/-/g, '')}`, organizationId, sourceType: 'instagram_browser', sourceExternalId: profile.username, instagramUsername: profile.username, instagramDisplayName: profile.displayName || null, instagramBio: profile.bio || null, instagramProfileUrl: `https://www.instagram.com/${profile.username}/`, sourceFields: JSON.stringify({ discoveryJobId: job.id, sourceUrl: profile.sourceUrl, keywords: payload.keywords, location: payload.location }), icpMatchScore: String(calculateICPScore({ companyNiche: payload.keywords, leadBio: profile.bio })), icpSegment: payload.keywords }).onConflictDoNothing().returning({ id: leads.id });
             inserted += result.length;
         }
-        const summary = { inserted, existing: profiles.length - inserted, found: profiles.length };
+        const summary = { inserted, existing: profiles.length - inserted, found: profiles.length, rejected, ingressRejected: rejected };
+        const error = input.error || (rejected && !profiles.length ? 'Os resultados encontrados estavam fora do segmento solicitado.' : null);
         delete payload.claimToken;
-        await tx.update(jobs).set({ status: input.error ? 'failed' : 'completed', finishedAt: new Date(), lastError: input.error || null, payload: JSON.stringify({ ...payload, ...summary }) }).where(eq(jobs.id, job.id));
+        await tx.update(jobs).set({ status: error ? 'failed' : 'completed', finishedAt: new Date(), lastError: error, payload: JSON.stringify({ ...payload, ...summary }) }).where(eq(jobs.id, job.id));
         return summary;
     });
 }
@@ -86,4 +90,49 @@ export async function renewDiscovery(organizationId: string, jobId: string, clai
         .where(and(eq(jobs.organizationId, organizationId), eq(jobs.kind, 'discovery'), eq(jobs.id, jobId), eq(jobs.status, 'running'), sql`(${jobs.payload}::jsonb->>'claimToken')=${claimToken}`))
         .returning({ id: jobs.id })
     return rows.length > 0
+}
+
+
+export async function reviewDiscovery(organizationId: string, jobId: string) {
+    return getDb().transaction(async tx => {
+        const [job] = await tx.select().from(jobs)
+            .where(and(eq(jobs.id, jobId), eq(jobs.organizationId, organizationId), eq(jobs.kind, 'discovery')))
+            .for('update')
+        if (!job || !['completed', 'failed'].includes(job.status)) return null
+        const payload = JSON.parse(job.payload || '{}')
+        // Only records actually ingested by this organization and this exact search are reviewed.
+        const associated = await tx.select().from(leads).where(and(
+            eq(leads.organizationId, organizationId),
+            eq(leads.sourceType, 'instagram_browser'),
+            sql`(${leads.sourceFields}::jsonb->>'discoveryJobId')=${job.id}`,
+        ))
+        if (!associated.length) return {valid: payload.found || 0, rejected: payload.rejected || 0, reviewed: 0}
+        let valid = 0
+        let rejected = 0
+        for (const lead of associated) {
+            if (segmentMatches(`${lead.instagramUsername || ''} ${lead.instagramDisplayName || ''} ${lead.instagramBio || ''}`, payload.keywords || '')) {
+                valid++
+                // Preserve user opt-outs and every unrelated contact restriction.
+                if (lead.leadStatus !== 'opted_out' && lead.noContactReason?.startsWith(OUTSIDE_SEGMENT_REASON)) {
+                    await tx.update(leads).set({noContact: false, noContactReason: null, updatedAt: new Date()})
+                        .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)))
+                }
+            } else {
+                rejected++
+                if (!lead.noContact || lead.noContactReason?.startsWith(OUTSIDE_SEGMENT_REASON)) {
+                    await tx.update(leads).set({noContact: true, noContactReason: `${OUTSIDE_SEGMENT_REASON}${payload.keywords}`, updatedAt: new Date()})
+                        .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)))
+                }
+            }
+        }
+        const ingressRejected = payload.ingressRejected ?? (payload.reviewedAt ? 0 : payload.rejected || 0)
+        const summary = {valid, rejected: ingressRejected + rejected, reviewed: associated.length}
+        const noValid = valid === 0 && associated.length > 0 && !(payload.existing || 0)
+        await tx.update(jobs).set({
+            status: noValid ? 'failed' : job.status,
+            lastError: noValid ? 'Resultados fora do segmento solicitado. Refaça a busca com o filtro corrigido.' : job.lastError,
+            payload: JSON.stringify({...payload, found: valid + (payload.existing || 0), inserted: valid, ingressRejected, rejected: summary.rejected, reviewedAt: new Date().toISOString()}),
+        }).where(and(eq(jobs.id, job.id), eq(jobs.organizationId, organizationId)))
+        return summary
+    })
 }

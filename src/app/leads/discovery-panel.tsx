@@ -10,6 +10,7 @@ type Job = {
         found?: number;
         inserted?: number;
         existing?: number;
+        rejected?: number;
     };
     createdAt: string;
 };
@@ -17,7 +18,7 @@ const labels: Record<string, string> = { pending: 'Aguardando Chrome', running: 
 export default function DiscoveryPanel({ onComplete }: {
     onComplete: () => void;
 }) {
-    const [keywords, setKeywords] = useState('gestão de condomínios, empresas, escritórios');
+    const [keywords, setKeywords] = useState('condomínios, imobiliárias, escritórios');
     const [location, setLocation] = useState('Lisboa');
     const [jobs, setJobs] = useState<Job[]>([]);
     const [online, setOnline] = useState(false);
@@ -58,6 +59,17 @@ export default function DiscoveryPanel({ onComplete }: {
     finally {
         setBusy(false);
     } }
+    async function review(jobId: string) {
+        setMessage('');
+        try {
+            const response = await fetch('/api/discovery/review', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jobId})});
+            const data = await response.json();
+            if (!response.ok) throw Error(data.error || 'Não foi possível revalidar.');
+            setMessage(`${data.valid} perfis do segmento; ${data.rejected} fora do segmento, bloqueados para contato.`);
+            await refresh();
+            onComplete();
+        } catch (error) {setMessage(error instanceof Error ? error.message : 'Falha de conexão.');}
+    }
     async function pair() { setMessage(''); try {
         const response = await fetch('/api/discovery/pair', { method: 'POST' });
         const data = await response.json();
@@ -90,6 +102,6 @@ export default function DiscoveryPanel({ onComplete }: {
   </form>
   {message ? <p role="status">{message}</p> : null}
   {connection ? <details><summary>Configuração do conector local</summary><label>Conexão do Chrome<textarea readOnly aria-label="Conexão do Chrome" rows={5} value={connection}/></label><button className="secondary-button" type="button" onClick={() => setConnection('')}>Ocultar conexão</button></details> : null}
-  {jobs.slice(0, 5).map(job => <article key={job.id} className="lead-row"><div><strong>{job.payload.keywords}</strong><span>{job.payload.location} · {labels[job.status] || job.status}</span>{job.lastError ? <span role="alert">{job.lastError}</span> : null}</div><div>{job.payload.found !== undefined ? `${job.payload.found} encontrados · ${job.payload.inserted} novos · ${job.payload.existing} existentes` : null}</div></article>)}
+  {jobs.slice(0, 5).map(job => <article key={job.id} className="lead-row"><div><strong>{job.payload.keywords}</strong><span>{job.payload.location} · {labels[job.status] || job.status}</span>{job.lastError ? <span role="alert">{job.lastError}</span> : null}</div><div>{job.payload.found !== undefined ? `${job.payload.found} encontrados · ${job.payload.inserted} novos · ${job.payload.existing || 0} existentes · ${job.payload.rejected || 0} fora do segmento` : null}{['completed', 'failed'].includes(job.status) ? <button type="button" className="secondary-button small-button" onClick={() => void review(job.id)}>Revalidar resultados</button> : null}</div></article>)}
  </section>;
 }

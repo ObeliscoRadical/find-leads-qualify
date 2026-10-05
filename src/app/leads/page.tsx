@@ -18,6 +18,8 @@ type Lead = {
   sourceType: string
   icpMatchScore: string | null
   createdAt: string
+  noContact: boolean | null
+  noContactReason: string | null
   instagramProfileUrl: string | null
 }
 
@@ -215,6 +217,7 @@ export default function LeadsPage() {
                   </div>
                   <div className="lead-row-meta">
                     <span className="status-pill">{statusLabels[lead.leadStatus]}</span>
+                    {lead.noContact && lead.noContactReason?.startsWith('Fora do segmento da busca: ') ? <span className="status-pill">Fora do segmento</span> : null}
                     <span>{lead.icpMatchScore ? `${Math.round(Number(lead.icpMatchScore) * 100)}% ICP` : 'ICP por definir'}</span>
                     <button className="secondary-button small-button" onClick={() => void deleteLead(lead.id)}>
                       Apagar
