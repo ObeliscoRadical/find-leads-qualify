@@ -11,7 +11,10 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "discovery:worker": "node scripts/discovery-worker.mjs",
+    "discovery:login": "node scripts/discovery-worker.mjs --login",
+    "test:discovery-worker": "node --test scripts/discovery-worker.test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -21,6 +24,7 @@
     "lucide-react": "^1.46.0",
     "next": "16.3.5",
     "pg": "^8.23.0",
+    "playwright-core": "^1.63.0",
     "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",

@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/register',
   '/politica-privacidade',
   '/api/health',
+  '/api/discovery/worker',
   '/api/auth/login',
   '/api/auth/register',
 ]

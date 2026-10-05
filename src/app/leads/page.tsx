@@ -1,5 +1,7 @@
 'use client'
 
+import DiscoveryPanel from './discovery-panel'
+
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 
 type Lead = {
@@ -16,6 +18,7 @@ type Lead = {
   sourceType: string
   icpMatchScore: string | null
   createdAt: string
+  instagramProfileUrl: string | null
 }
 
 type LeadStatus = 'new' | 'contacted' | 'replied' | 'qualified' | 'closed' | 'opted_out'
@@ -61,6 +64,7 @@ export default function LeadsPage() {
   }, [search, status])
 
   const loadLeads = useCallback(async () => {
+    try {
     const response = await fetch(`/api/leads?${query}`)
     const body = await response.json().catch(() => null)
     setLoading(false)
@@ -70,6 +74,10 @@ export default function LeadsPage() {
     }
     setLeads(body.leads || [])
     setTotal(body.pagination?.total || 0)
+    } catch {
+      setLoading(false)
+      setMessage('Sem conexão com o app. Não foi possível atualizar os leads.')
+    }
   }, [query])
 
   useEffect(() => {
@@ -133,6 +141,8 @@ export default function LeadsPage() {
         </div>
 
         {message ? <p className="form-error">{message}</p> : null}
+
+        <DiscoveryPanel onComplete={loadLeads} />
 
         <div className="lead-layout">
           <form className="form lead-form" onSubmit={createLead}>
@@ -200,6 +210,7 @@ export default function LeadsPage() {
                 <article key={lead.id} className="lead-row">
                   <div>
                     <strong>{lead.contactName || lead.instagramDisplayName || lead.instagramUsername || lead.contactEmail || 'Lead sem nome'}</strong>
+                    {lead.instagramUsername ? <a href={lead.instagramProfileUrl || `https://www.instagram.com/${lead.instagramUsername}/`} target="_blank" rel="noopener noreferrer">@{lead.instagramUsername}</a> : null}
                     <span>{lead.website || lead.contactPhone || lead.contactWhatsapp || lead.contactEmail || lead.sourceType}</span>
                   </div>
                   <div className="lead-row-meta">
