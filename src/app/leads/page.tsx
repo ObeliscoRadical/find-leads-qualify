@@ -1,6 +1,7 @@
 'use client'
 
 import DiscoveryPanel from './discovery-panel'
+import BackButton from '../back-button'
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 
@@ -131,6 +132,7 @@ export default function LeadsPage() {
   return (
     <main className="app-shell">
       <section className="dashboard workbench">
+        <BackButton />
         <div className="page-heading">
           <div>
             <p className="eyebrow">Leads</p>

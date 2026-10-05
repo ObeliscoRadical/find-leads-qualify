@@ -1,4 +1,5 @@
 'use client'
+import BackButton from '../back-button'
 
 import { useEffect, useState } from 'react'
 
@@ -84,6 +85,7 @@ export default function KanbanPage() {
   return (
     <main className="app-shell">
       <section className="dashboard kanban-workbench">
+        <BackButton />
         <div className="page-heading">
           <div>
             <p className="eyebrow">Pipeline</p>

@@ -1,4 +1,5 @@
 'use client'
+import BackButton from '../../back-button'
 
 import { useEffect, useState } from 'react'
 
@@ -115,6 +116,7 @@ export default function MetaSettingsPage() {
   return (
     <main className="app-shell">
       <section className="dashboard">
+        <BackButton />
         <div>
           <p className="eyebrow">Definições</p>
           <h1>Meta e Instagram</h1>

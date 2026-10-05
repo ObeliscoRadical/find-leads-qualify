@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import BackButton from '../../back-button'
 import { BarChart3, Building2, CheckCircle2, LineChart, Search, Settings, Sparkles, Target } from 'lucide-react'
 
 export type NavId = 'overview' | 'discover' | 'qualify' | 'pipeline' | 'companies' | 'metrics' | 'settings'
@@ -69,7 +70,7 @@ export function AppShell({
           <div><h1>{headerTitle}</h1><p>{headerSubtitle}</p></div>
           {headerRight}
         </header>
-        <div className="fl-content">{children}</div>
+        <div className="fl-content">{active !== 'overview' && <BackButton />}{children}</div>
       </section>
     </main>
   )
