@@ -23,6 +23,7 @@ export default function DiscoveryPanel({ onComplete }: {
     const [online, setOnline] = useState(false);
     const [connectionError, setConnectionError] = useState('');
     const [message, setMessage] = useState('');
+    const [connection, setConnection] = useState('');
     const [busy, setBusy] = useState(false);
     const refresh = useCallback(async () => {
         try {
@@ -62,14 +63,18 @@ export default function DiscoveryPanel({ onComplete }: {
         const data = await response.json();
         if (!response.ok)
             throw Error(data.error);
-        const blob = new Blob([JSON.stringify({ appUrl: window.location.origin, token: data.token }, null, 2)], { type: 'application/json' });
+        const connectionJson = JSON.stringify({ appUrl: window.location.origin, token: data.token }, null, 2);
+        setConnection(connectionJson);
+        const blob = new Blob([connectionJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
         link.download = 'leads-chrome-connection.json';
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(url);
-        setMessage('Conexão descarregada, válida por 7 dias. Use este arquivo no conector local do Chrome.');
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setMessage('Conexão criada, válida por 7 dias. Use o arquivo descarregado ou copie a conexão abaixo para o conector local.');
     }
     catch (error) {
         setMessage(error instanceof Error ? error.message : 'Não foi possível conectar.');
@@ -84,6 +89,7 @@ export default function DiscoveryPanel({ onComplete }: {
    <div className="filters"><button className="primary-button" disabled={busy || jobs.some(j => ['pending', 'running'].includes(j.status))}>{busy ? 'A iniciar...' : 'Buscar 10 leads'}</button><button type="button" className="secondary-button" onClick={() => void pair()}>Conectar Chrome</button></div>
   </form>
   {message ? <p role="status">{message}</p> : null}
+  {connection ? <details><summary>Configuração do conector local</summary><label>Conexão do Chrome<textarea readOnly aria-label="Conexão do Chrome" rows={5} value={connection}/></label><button className="secondary-button" type="button" onClick={() => setConnection('')}>Ocultar conexão</button></details> : null}
   {jobs.slice(0, 5).map(job => <article key={job.id} className="lead-row"><div><strong>{job.payload.keywords}</strong><span>{job.payload.location} · {labels[job.status] || job.status}</span>{job.lastError ? <span role="alert">{job.lastError}</span> : null}</div><div>{job.payload.found !== undefined ? `${job.payload.found} encontrados · ${job.payload.inserted} novos · ${job.payload.existing} existentes` : null}</div></article>)}
  </section>;
 }
