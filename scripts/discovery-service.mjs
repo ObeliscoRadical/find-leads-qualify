@@ -22,6 +22,26 @@ export function servicePlist({ projectDir, nodePath, configPath }) {
 <key>StandardErrorPath</key><string>${x(path.join(projectDir, '.discovery/service-error.log'))}</string>
 </dict></plist>\n`
 }
+export async function restartService(run, domain, plistPath, { sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  const target = `${domain}/${label}`
+  const removed = await run(['bootout', target])
+  // bootout can return before launchd has removed the existing service.
+  if (removed.status === 0) {
+    let absent = false
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const state = await run(['print', target])
+      if (state.status !== 0) { absent = true; break }
+      await sleep(250)
+    }
+    if (!absent) throw new Error('O serviço anterior ainda está encerrando. Tente novamente após alguns segundos.')
+  }
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const result = await run(['bootstrap', domain, plistPath])
+    if (result.status === 0) return
+    if (result.status !== 5 || attempt === 9) throw new Error(result.stderr || 'Não foi possível carregar o serviço.')
+    await sleep(500)
+  }
+}
 async function main() {
   if (process.platform !== 'darwin') throw new Error('O serviço requer macOS.')
   const action = process.argv[2]
@@ -40,9 +60,7 @@ async function main() {
   await fs.mkdir(path.dirname(plistPath), { recursive: true })
   await fs.mkdir(path.join(projectDir, '.discovery'), { recursive: true, mode: 0o700 })
   await fs.writeFile(plistPath, servicePlist({ projectDir, nodePath: process.execPath, configPath }), { mode: 0o600 })
-  run(['bootout', `${domain}/${label}`])
-  const result = run(['bootstrap', domain, plistPath])
-  if (result.status !== 0) throw new Error(result.stderr || 'Não foi possível carregar o serviço.')
+  await restartService(run, domain, plistPath)
   console.log('Busca autônoma ativada neste Mac, ao iniciar sessão. Logs em .discovery/service.log.')
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1 })
