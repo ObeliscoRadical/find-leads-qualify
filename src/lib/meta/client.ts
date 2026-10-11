@@ -75,14 +75,14 @@ export class MetaProviderError extends Error {
   }
 }
 
-export function getMetaOAuthUrl(state: string, capture = false) {
+export function getMetaOAuthUrl(state: string, capture = false, messaging = false) {
   const env = getMetaEnv()
   const url = new URL(`https://www.facebook.com/${env.META_API_VERSION}/dialog/oauth`)
   url.searchParams.set('client_id', env.META_APP_ID)
   url.searchParams.set('redirect_uri', env.META_REDIRECT_URI)
   url.searchParams.set('state', state)
   url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', getMetaScopes(capture).join(','))
+  url.searchParams.set('scope', getMetaScopes(capture, messaging).join(','))
   return url
 }
 
@@ -93,9 +93,10 @@ export function getMetaSettingsUrl(status: string) {
   return url
 }
 
-export function getMetaScopes(capture = false) {
+export function getMetaScopes(capture = false, messaging = false) {
   const base = ['pages_show_list', 'instagram_basic', 'business_management', 'pages_read_engagement']
-  return capture ? [...base, 'leads_retrieval', 'pages_manage_metadata', 'pages_manage_ads'] : base
+  const scopes = capture ? [...base, 'leads_retrieval', 'pages_manage_metadata', 'pages_manage_ads'] : base
+  return messaging ? [...new Set([...scopes, 'instagram_manage_messages', 'pages_manage_metadata'])] : scopes
 }
 
 export async function exchangeCodeForLongLivedToken(code: string): Promise<MetaTokenInfo> {

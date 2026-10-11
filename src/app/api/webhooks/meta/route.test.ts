@@ -2,6 +2,8 @@ import { createHmac } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const store = vi.hoisted(() => ({ pageConnections: vi.fn(), captureLead: vi.fn() }))
 vi.mock('@/lib/meta/capture-store', () => store)
+const messaging = vi.hoisted(() => ({ingestInstagramEvent:vi.fn()}))
+vi.mock('@/lib/meta/messaging', () => messaging)
 import { GET, POST } from './route'
 import { resetEnvCache } from '@/lib/env'
 function eventRequest(value: unknown, signed = true) {
@@ -36,5 +38,22 @@ describe('Meta lead webhook', () => {
     store.pageConnections.mockResolvedValue([{ organizationId: 'owner' }])
     store.captureLead.mockRejectedValue(new Error('Database unavailable'))
     expect((await POST(eventRequest(event))).status).toBe(503)
+  })
+})
+
+describe('signed Instagram inbox webhook', () => {
+  const incoming = {object:'instagram',entry:[{id:'17841442395563501',messaging:[{sender:{id:'123'},recipient:{id:'17841442395563501'},timestamp:1720000000000,message:{mid:'m_real',text:'Quero saber mais'}}]}]}
+  it('does not route an unsigned message', async () => {
+    expect((await POST(eventRequest(incoming,false))).status).toBe(403)
+    expect(messaging.ingestInstagramEvent).not.toHaveBeenCalled()
+  })
+  it('routes signed events by the linked recipient account', async () => {
+    expect((await POST(eventRequest(incoming))).status).toBe(200)
+    expect(messaging.ingestInstagramEvent).toHaveBeenCalledWith('17841442395563501',incoming.entry[0].messaging[0])
+    expect(store.captureLead).not.toHaveBeenCalled()
+  })
+  it('requests retry on storage failure', async () => {
+    messaging.ingestInstagramEvent.mockRejectedValueOnce(new Error('database'))
+    expect((await POST(eventRequest(incoming))).status).toBe(503)
   })
 })

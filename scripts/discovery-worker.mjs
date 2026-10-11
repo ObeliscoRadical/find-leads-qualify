@@ -144,10 +144,17 @@ async function main() {
     await fs.mkdir(profileDir, { recursive: true, mode: 0o700 })
     context = await chromium.launchPersistentContext(profileDir, { channel: 'chrome', headless: false })
   }
-  const page = await context.newPage()
+  let stopping = false
+  let page
+  let closePromise
+  const closeBrowser = () => closePromise ||= (browser ? page?.close().catch(() => {}) : context.close().catch(() => {}))
+  const requestStop = () => { stopping = true; void closeBrowser() }
+  process.once('SIGTERM', requestStop)
+  process.once('SIGINT', requestStop)
+  page = await context.newPage()
   await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded' })
   await delay(3000)
-  console.log('Chrome dedicado aberto. Entre no Instagram nele; o worker só busca perfis e não envia mensagens.')
+  console.log('Chrome dedicado aberto. Entre no Instagram nele; envios dependem de ativação explícita local e no aplicativo.')
   if (loginOnly) {
     console.log('Login manual: mantenha esta janela aberta. Depois execute npm run discovery:worker para processar buscas.')
     await new Promise(resolve => context.on('close', resolve))
@@ -170,7 +177,7 @@ async function main() {
     return requestApi(endpoint, settings.token, method, body)
   }
   let lastInboxCheck = 0
-  while (true) {
+  while (!stopping) {
     try { await guard(page) } catch (error) { console.log(error.message); if (process.argv.includes('--once')) { process.exitCode = 1; break }; await delay(10000); continue }
     let claimed
     let heartbeat
@@ -198,7 +205,31 @@ async function main() {
         const { inspectInbox } = await import('./discovery-inbox.mjs')
         await inspectInbox(page, monitoredLeads)
       }
-      if (!job) { if (process.argv.includes('--once')) break; await delay(10000); continue }
+      if (!job) {
+        if (settings.automaticOutreachEnabled === true && !stopping) {
+          const outreachEndpoint = new URL('/api/outreach/worker', settings.apiUrl)
+          const {job: outbound} = await requestApi(outreachEndpoint, settings.token, 'GET')
+          if (outbound) {
+            let outcome
+            try {
+              if (!settings.expectedInstagramUsername) throw new Error('Configure a conta remetente esperada antes de enviar.')
+              await page.goto('https://www.instagram.com/', {waitUntil:'domcontentloaded',timeout:45000})
+              await verifyAccount()
+              const {sendOutreach, chromeOutreachAdapter} = await import('./outreach-worker.mjs')
+              const result = await sendOutreach(chromeOutreachAdapter(page), {instagramUsername:outbound.username,instagramProfileUrl:outbound.profileUrl,content:outbound.message}, {authorize: async () => {
+                const authorized = await requestApi(outreachEndpoint, settings.token, 'PATCH', {jobId:outbound.id,claimToken:outbound.claimToken})
+                return authorized.authorized === true
+              }})
+              outcome = {outcome:result.status === 'sent' ? 'sent' : result.status === 'manual_review' ? 'uncertain' : 'failed', ...(result.threadUrl ? {threadUrl:result.threadUrl} : {}), ...(result.error ? {error:result.error} : {})}
+            } catch (error) { outcome = {outcome:'failed',error:String(error.message).slice(0,500)} }
+            await requestApi(outreachEndpoint, settings.token, 'POST', {jobId:outbound.id,claimToken:outbound.claimToken,...outcome})
+            console.log(`Primeiro contato: ${outcome.outcome}; confira o histórico no aplicativo.`)
+          }
+        }
+        if (process.argv.includes('--once')) break
+        await delay(10000)
+        continue
+      }
       claimed = job
       await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 })
       await verifyAccount()
@@ -227,7 +258,8 @@ async function main() {
     if (process.argv.includes('--once')) break
     await delay(10000)
   }
-  await page.close()
-  if (!browser) await context.close()
+  await closeBrowser()
+  process.removeListener('SIGTERM', requestStop)
+  process.removeListener('SIGINT', requestStop)
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1 })

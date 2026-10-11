@@ -28,6 +28,11 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   OPENAI_BUDGET_USD: z.string().default('100.00'),
 
+  // LiteLLM gateway (server-only credentials)
+  LITELLM_API_KEY: z.string().optional(),
+  LITELLM_BASE_URL: z.string().url().default('https://obelisco-litellm.onrender.com'),
+  LITELLM_MODEL: z.string().default('obelisco-fast'),
+
   // Email
   RESEND_API_KEY: z.string().optional(),
 

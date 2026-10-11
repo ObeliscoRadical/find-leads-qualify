@@ -1,3 +1,4 @@
+import { hasMessagingScopes, messagingScopes } from '@/lib/meta/messaging'
 import { getEnv } from '@/lib/env'
 import { hasCaptureScopes } from '@/lib/meta/lead-capture'
 import { jsonError } from '@/lib/api'
@@ -21,6 +22,10 @@ export async function GET(request: Request) {
 
   return Response.json({
     status: connection.status,
+    messagingAuthorized: hasMessagingScopes(connection.scopes),
+    messagingReady: false,
+    messagingRequiredPermissions: messagingScopes,
+    messagingBlocker: 'Autorize mensagens e confirme a assinatura messages do webhook na Meta; recebimento real ainda não validado.',
     captureReady: hasCaptureScopes(connection.scopes) && getEnv().META_CAPTURE_ENABLED === 'true',
     connection: {
       pageId: connection.pageId,

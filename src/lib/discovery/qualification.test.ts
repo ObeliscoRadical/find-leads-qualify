@@ -15,7 +15,7 @@ describe('conservative prospect evidence', () => {
         expect(assessDiscoveryProfile('Condomínios e limpezas em Lisboa', 'condomínios', 'Lisboa').buyerFit).toBe('review');
         const assessment = assessDiscoveryProfile('Empresa de limpeza em Lisboa', 'condomínios', 'Lisboa');
         expect(assessment.buyerFit).toBe('service_provider');
-        expect(assessment.requiresReview).toBe(true);
+        expect(assessment.requiresReview).toBe(false);
         expect(assessDiscoveryProfile('Empresa de limpeza em Lisboa', 'empresas de limpeza', 'Lisboa').buyerFit).toBe('potential');
     });
     it('keeps missing location uncertain rather than declaring a foreign profile', () => {

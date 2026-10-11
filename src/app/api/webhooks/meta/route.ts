@@ -1,10 +1,11 @@
+import { ingestInstagramEvent } from '@/lib/meta/messaging'
 import { z } from 'zod'
 import { getEnv, getMetaEnv } from '@/lib/env'
 import { validMetaSignature } from '@/lib/meta/lead-capture'
 import { captureLead, pageConnections } from '@/lib/meta/capture-store'
 
 export const runtime = 'nodejs'
-const payloadSchema = z.object({ object: z.string(), entry: z.array(z.object({ id: z.string().regex(/^\d+$/), changes: z.array(z.object({ field: z.string(), value: z.unknown() })).optional() })).optional() })
+const payloadSchema = z.object({ object: z.string(), entry: z.array(z.object({ id: z.string().regex(/^\d+$/), messaging: z.array(z.unknown()).optional(), changes: z.array(z.object({ field: z.string(), value: z.unknown() })).optional() })).optional() })
 const eventSchema = z.object({ leadgen_id: z.string().regex(/^\d+$/), page_id: z.string().regex(/^\d+$/) })
 
 export async function GET(request: Request) {
@@ -21,9 +22,13 @@ export async function POST(request: Request) {
   let parsed
   try { parsed = payloadSchema.safeParse(JSON.parse(body.toString('utf8'))) } catch { return new Response('Invalid JSON', { status: 400 }) }
   if (!parsed.success) return new Response('Invalid payload', { status: 400 })
-  if (parsed.data.object !== 'page') return new Response('EVENT_RECEIVED')
+  if (parsed.data.object !== 'page' && parsed.data.object !== 'instagram') return new Response('EVENT_RECEIVED')
   try {
     for (const entry of parsed.data.entry || []) {
+      if (parsed.data.object === 'instagram') {
+        for (const event of entry.messaging || []) await ingestInstagramEvent(entry.id, event)
+        continue
+      }
       for (const change of entry.changes || []) {
         if (change.field !== 'leadgen') continue
         const event = eventSchema.safeParse(change.value)

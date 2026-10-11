@@ -65,7 +65,7 @@ export async function finishDiscovery(organizationId: string, input: z.infer<typ
             if (existing.length)
                 continue;
             const assessment = assessDiscoveryProfile(profile.bio || '', payload.keywords || '', payload.location || '');
-            const result = await tx.insert(leads).values({ id: `lead_${crypto.randomUUID().replace(/-/g, '')}`, organizationId, sourceType: 'instagram_browser', sourceExternalId: profile.username, instagramUsername: profile.username, instagramDisplayName: profile.displayName || null, instagramBio: profile.bio || null, instagramProfileUrl: `https://www.instagram.com/${profile.username}/`, sourceFields: JSON.stringify({ discoveryJobId: job.id, sourceUrl: profile.sourceUrl, keywords: payload.keywords, location: payload.location, assessment }), noContact: assessment.buyerFit === 'service_provider', noContactReason: assessment.buyerFit === 'service_provider' ? `${QUALIFICATION_REVIEW_REASON}${assessment.reasons[1]}` : null, icpMatchScore: String(calculateICPScore({ companyNiche: payload.keywords, leadBio: profile.bio })), icpSegment: payload.keywords }).onConflictDoNothing().returning({ id: leads.id });
+            const result = await tx.insert(leads).values({ id: `lead_${crypto.randomUUID().replace(/-/g, '')}`, organizationId, sourceType: 'instagram_browser', sourceExternalId: profile.username, instagramUsername: profile.username, instagramDisplayName: profile.displayName || null, instagramBio: profile.bio || null, instagramProfileUrl: `https://www.instagram.com/${profile.username}/`, sourceFields: JSON.stringify({ discoveryJobId: job.id, sourceUrl: profile.sourceUrl, keywords: payload.keywords, location: payload.location, assessment }), icpMatchScore: String(calculateICPScore({ companyNiche: payload.keywords, leadBio: profile.bio })), icpSegment: payload.keywords }).onConflictDoNothing().returning({ id: leads.id });
             inserted += result.length;
         }
         const summary = { inserted, existing: profiles.length - inserted, found: profiles.length, rejected, ingressRejected: rejected };
@@ -128,10 +128,10 @@ export async function reviewDiscovery(organizationId: string, jobId: string) {
             await tx.update(leads).set({sourceFields: JSON.stringify({...sourceFields, assessment}), updatedAt: new Date()})
                 .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)));
             // Apply only our own reversible restriction, preserving opt-outs and unrelated restrictions.
-            if (lead.leadStatus !== 'opted_out' && ((!lead.noContact && assessment.buyerFit === 'service_provider') || lead.noContactReason?.startsWith(QUALIFICATION_REVIEW_REASON))) {
-                const needsReview = assessment.buyerFit === 'service_provider';
-                await tx.update(leads).set({noContact: needsReview, noContactReason: needsReview ? `${QUALIFICATION_REVIEW_REASON}${assessment.reasons[1]}` : null, updatedAt: new Date()})
-                    .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)));
+            if (lead.leadStatus !== 'opted_out' && lead.noContactReason?.startsWith(QUALIFICATION_REVIEW_REASON)) {
+                // User explicitly includes cleaning firms. Remove only this task's generated restriction.
+                await tx.update(leads).set({noContact: false, noContactReason: null, updatedAt: new Date()})
+                    .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId), sql`${leads.leadStatus} <> 'opted_out'`, sql`${leads.noContactReason} LIKE ${QUALIFICATION_REVIEW_REASON + '%'}`));
             }
             if (segmentMatches(`${lead.instagramUsername || ''} ${lead.instagramDisplayName || ''} ${lead.instagramBio || ''}`, payload.keywords || '')) {
                 valid++

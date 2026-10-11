@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 type StatusResponse = {
   status: 'disconnected' | 'pending_selection' | 'connected' | string
   captureReady?: boolean
+  messagingAuthorized?: boolean
+  messagingBlocker?: string
   connection: {
     pageId: string | null
     pageName: string | null
@@ -168,6 +170,12 @@ export default function MetaSettingsPage() {
 
         {status?.status === 'connected' ? (
           <section>
+            <h2>Respostas do Instagram ligado</h2>
+            <p>As respostas chegam à conta Instagram acima. O webhook recebe o texto real e associa o remetente pelo ID ou perfil oficial. Não envia respostas automaticamente.</p>
+            <p>{status.messagingBlocker}</p>
+            {!status.messagingAuthorized ? <a className="primary-button" href="/api/meta/oauth/connect?messaging=1" onClick={event => {
+              if (!window.confirm('Autorizar instagram_manage_messages e pages_manage_metadata na Meta para receber mensagens desta conta?')) event.preventDefault();
+            }}>Autorizar recebimento de mensagens</a> : <p>Permissões presentes. Confirme a assinatura do webhook e teste uma resposta real.</p>}
             <h2>Leads de formulários Meta</h2>
             <p>Receba automaticamente os contatos enviados aos formulários da sua Página. A ativação também importa até 100 contatos por formulário, de até 50 formulários, sem duplicar leads.</p>
             {status.captureReady ? (

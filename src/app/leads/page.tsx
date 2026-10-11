@@ -1,6 +1,7 @@
 'use client'
 
 import { leadAssessment } from '@/lib/leads/contact'
+import OutreachPanel from './outreach-panel'
 import ContactPanel from './contact-panel'
 import DiscoveryPanel from './discovery-panel'
 import BackButton from '../back-button'
@@ -151,6 +152,7 @@ export default function LeadsPage() {
         {message ? <p className="form-error">{message}</p> : null}
 
         <DiscoveryPanel onComplete={loadLeads} />
+        <OutreachPanel />
 
         <div className="lead-layout">
           <form className="form lead-form" onSubmit={createLead}>

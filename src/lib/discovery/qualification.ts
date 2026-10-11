@@ -27,5 +27,5 @@ export function assessDiscoveryProfile(bio: string, keywords: string, location: 
     if (buyerFit === 'service_provider') reasons.push('A biografia anuncia serviços de limpeza; confirmar se é um comprador do serviço procurado.');
     else if (buyerFit === 'review') reasons.push('A biografia menciona limpeza; o papel de comprador ou prestador exige revisão.');
     else reasons.push('Correspondência de segmento preliminar; confirmar empresa, necessidade e pessoa de contacto.');
-    return { locationEvidence: locationConfirmed ? 'confirmed' as const : 'unverified' as const, buyerFit, requiresReview: !locationConfirmed || buyerFit !== 'potential', reasons };
+    return { locationEvidence: locationConfirmed ? 'confirmed' as const : 'unverified' as const, buyerFit, requiresReview: !locationConfirmed, reasons };
 }
