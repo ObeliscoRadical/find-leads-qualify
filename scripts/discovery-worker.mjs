@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -38,6 +39,7 @@ async function guard(page) {
 }
 export async function discover(page, job) {
   const profiles = new Map()
+  const existing = new Set((job.existingUsernames || []).map(value => String(value).toLowerCase()))
   const keywords = splitKeywords(job.keywords)
   if (!keywords.length) throw new Error('A busca precisa de pelo menos um segmento.')
   try {
@@ -55,24 +57,27 @@ export async function discover(page, job) {
       input = page.locator('input[placeholder="Pesquisar"], input[placeholder="Search"], input[aria-label="Entrada da pesquisa"], input[aria-label="Search input"]').first()
     }
     await input.waitFor({ state: 'visible', timeout: 15000 })
-    await input.fill(query)
     const sourceUrl = page.url()
     let candidates = []
+    for (const searchQuery of [...new Set([query, normalizeSearch(keyword)])]) {
+    await input.fill(searchQuery)
     const deadline = Date.now() + 25000
     while (Date.now() < deadline) {
       job.assertActive?.()
       await guard(page)
       const links = await page.locator('main a[href]').evaluateAll(nodes => nodes.map(a => ({ href: a.href, text: a.innerText })))
-      candidates = uniqueProfiles(links).filter(candidate => segmentMatches(`${candidate.username} ${candidate.displayName}`, keyword))
+      candidates = uniqueProfiles(links).filter(candidate => !existing.has(candidate.username) && !profiles.has(candidate.username) && segmentMatches(`${candidate.username} ${candidate.displayName}`, keyword))
       if (candidates.length) break
       const mainText = await page.locator('main').innerText()
       if (/nenhum resultado|no results|nao encontramos|não encontramos/i.test(mainText)) break
       await delay(1000)
     }
+    if (candidates.length) break
+    }
     // Each candidate must be an actual profile shown in Instagram's search and opened successfully.
     for (const candidate of candidates) {
       if (profiles.size >= job.limit) break
-      if (profiles.has(candidate.username)) continue
+      if (profiles.has(candidate.username) || existing.has(candidate.username)) continue
       job.assertActive?.()
       await page.goto(candidate.profileUrl, { waitUntil: 'domcontentloaded', timeout: 45000 })
       await guard(page)
@@ -97,6 +102,23 @@ export async function discover(page, job) {
   } catch (error) { error.profiles = [...profiles.values()]; throw error }
   return [...profiles.values()]
 }
+export async function requestApi(endpoint, token, method, body, { fetchImpl = fetch, timeoutMs = 20000 } = {}) {
+  const response = await fetchImpl(endpoint, { method, signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
+  if (!response.ok) { const error = new Error(`API de descoberta respondeu ${response.status}; confira a conexão do worker no aplicativo.`); error.status = response.status; throw error }
+  return response.json()
+}
+export async function persistRenewedToken(configPath, token) {
+  if (typeof token !== 'string' || !token) throw new Error('Token renovado inválido.')
+  const stat = await fs.lstat(configPath)
+  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0) throw new Error('A configuração deve ser um arquivo privado com permissões 600.')
+  const saved = JSON.parse(await fs.readFile(configPath, 'utf8'))
+  const temp = `${configPath}.${randomUUID()}.tmp`
+  try {
+    await fs.writeFile(temp, JSON.stringify({ ...saved, token }, null, 2) + '\n', {mode:0o600, flag:'wx'})
+    await fs.rename(temp, configPath)
+  } finally { await fs.rm(temp, {force:true}) }
+}
+export function terminalApiError(error) { return [401, 403].includes(error?.status) }
 async function config() {
   let saved = {}
   if (process.env.DISCOVERY_CONFIG) {
@@ -133,7 +155,6 @@ async function main() {
   }
   let connectedUsername
   async function verifyAccount() {
-    if (connectedUsername) return
     await guard(page)
     const accountLink = page.getByRole('link', { name: /^Foto do perfil de |^Profile picture of /i }).first()
     await accountLink.waitFor({ state: 'visible', timeout: 15000 })
@@ -146,12 +167,11 @@ async function main() {
   }
   const endpoint = new URL('/api/discovery/worker', settings.apiUrl)
   async function api(method, body) {
-    const response = await fetch(endpoint, { method, headers: { Authorization: `Bearer ${settings.token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
-    if (!response.ok) { const error = new Error(`API de descoberta respondeu ${response.status}; confira a conexão do worker no aplicativo.`); error.status = response.status; throw error }
-    return response.json()
+    return requestApi(endpoint, settings.token, method, body)
   }
+  let lastInboxCheck = 0
   while (true) {
-    try { await guard(page); await verifyAccount() } catch (error) { console.log(error.message); await delay(10000); continue }
+    try { await guard(page) } catch (error) { console.log(error.message); if (process.argv.includes('--once')) { process.exitCode = 1; break }; await delay(10000); continue }
     let claimed
     let heartbeat
     let heartbeatStopped = false
@@ -160,14 +180,33 @@ async function main() {
     let leaseError
     async function stopHeartbeat() { heartbeatStopped = true; if (heartbeat) clearInterval(heartbeat); await heartbeatPromise }
     try {
-      const { job } = await api('GET')
+      const { job, monitoredLeads = [], renewedToken } = await api('GET')
+      claimed = job
+      if (renewedToken) {
+        settings.token = renewedToken
+        if (process.env.DISCOVERY_CONFIG) {
+          try {
+            await persistRenewedToken(process.env.DISCOVERY_CONFIG, renewedToken)
+            console.log('Credencial de descoberta renovada com o mesmo acesso.')
+          } catch { console.warn('Credencial renovada nesta sessão, mas não foi possível preservar no arquivo protegido. Corrija a configuração antes de reiniciar.') }
+        } else console.warn('Credencial renovada nesta sessão; configure DISCOVERY_CONFIG privado para preservar a renovação após reiniciar.')
+      }
+      if (process.argv.includes('--inspect-inbox') && !job && monitoredLeads.length && Date.now() - lastInboxCheck >= 300000) {
+        lastInboxCheck = Date.now()
+        await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 })
+        await verifyAccount()
+        const { inspectInbox } = await import('./discovery-inbox.mjs')
+        await inspectInbox(page, monitoredLeads)
+      }
       if (!job) { if (process.argv.includes('--once')) break; await delay(10000); continue }
       claimed = job
+      await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 })
+      await verifyAccount()
       heartbeat = setInterval(() => {
         if (heartbeatStopped || heartbeatPending) return
         heartbeatPending = true
         heartbeatPromise = api('PATCH', { jobId: job.id, claimToken: job.claimToken })
-          .catch(error => { if (error.status === 409) leaseError = error; if (!heartbeatStopped) console.error(error.message) })
+          .catch(error => { if (error.status === 409 || terminalApiError(error)) leaseError = error; if (!heartbeatStopped) console.error(error.message) })
           .finally(() => { heartbeatPending = false })
       }, 30000)
       console.log('Busca de perfis reais iniciada no Instagram.')
@@ -180,6 +219,8 @@ async function main() {
     } catch (error) {
       await stopHeartbeat()
       console.error(error.message)
+      if (terminalApiError(error)) { console.error('Worker pausado: renove a conexão no aplicativo e reinicie o serviço.'); process.exitCode = 0; break }
+      if (process.argv.includes('--once')) process.exitCode = 1
       if (claimed && !leaseError) { try { await api('POST', { jobId: claimed.id, claimToken: claimed.claimToken, profiles: error.profiles || [], error: String(error.message).slice(0, 500) }) } catch (reportError) { console.error(reportError.message) } }
     }
     await stopHeartbeat()

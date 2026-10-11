@@ -1,4 +1,5 @@
-import { createMessage, getLeadById, getLeadMessages } from '@/db/queries'
+import { getLeadById, getLeadMessages } from '@/db/queries'
+import { recordContactMessage } from '@/lib/leads/contact-store'
 import { jsonError, parseJson } from '@/lib/api'
 import { requireAuth } from '@/lib/api-auth'
 import { messagePayloadSchema } from '../../schemas'
@@ -39,11 +40,20 @@ export async function POST(request: Request, context: RouteContext) {
   const lead = await getLeadById(auth.session.organizationId, id)
   if (!lead) return jsonError('Lead não encontrado.', 404)
 
-  const message = await createMessage({
+  if (!parsed.data.isFromLead && (lead.noContact || lead.leadStatus === 'opted_out')) {
+    return jsonError('Este lead está bloqueado para contacto.', 409)
+  }
+  if (!parsed.data.isFromLead && !parsed.data.confirmedSent) {
+    return jsonError('Confirme primeiro que enviou a mensagem no Instagram. Este endpoint apenas regista mensagens.', 400)
+  }
+  if (parsed.data.sentVia !== 'manual') return jsonError('O envio pela API não está disponível neste fluxo.', 400)
+
+  const message = await recordContactMessage({
     ...parsed.data,
     organizationId: auth.session.organizationId,
     leadId: id,
   })
 
-  return Response.json({ message }, { status: 201, headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
+  if (!message) return jsonError('Lead indisponível ou bloqueado para contacto.', 409)
+  return Response.json({ message, delivery: 'recorded_manually' }, { status: 201, headers: { 'X-RateLimit-Remaining': String(result.remaining) } })
 }

@@ -11,8 +11,8 @@ describe('reversible review of a discovery job', () => {
     const changes: {table: unknown, value: Record<string, unknown>}[] = []
     const job = {id: 'job_one', status: 'completed', lastError: null, payload: JSON.stringify({keywords: 'condomínios', found: 3, inserted: 3, ingressRejected: 2, rejected: 2})}
     const associated = [
-      {id:'wrong', instagramUsername:'fitness_portugal', instagramDisplayName:'Fitness Portugal', instagramBio:'Ginásio', noContact:false, noContactReason:null},
-      {id:'valid', instagramUsername:'condominioslisboa', instagramDisplayName:'Condomínios Lisboa', instagramBio:'Administração de condomínios', noContact:false, noContactReason:null},
+      {id:'wrong', instagramUsername:'fitness_portugal', instagramDisplayName:'Fitness Portugal', instagramBio:'Ginásio', sourceFields:'invalid json', noContact:false, noContactReason:null},
+      {id:'valid', instagramUsername:'condominioslisboa', instagramDisplayName:'Condomínios Lisboa', instagramBio:'Administração de condomínios', sourceFields:JSON.stringify({sourceUrl:'https://www.instagram.com/explore/'}), noContact:false, noContactReason:null},
       {id:'optout', instagramUsername:'other', instagramDisplayName:'Fitness', instagramBio:'Fitness', noContact:true, noContactReason:'Cliente pediu para não ser contatado'},
     ]
     let selects = 0
@@ -22,7 +22,12 @@ describe('reversible review of a discovery job', () => {
     }
     dbMock.mockReturnValue({transaction: async (callback:(value:unknown)=>unknown) => callback(tx)} as unknown as ReturnType<typeof getDb>)
     expect(await reviewDiscovery('org_one','job_one')).toEqual({valid:1,rejected:4,reviewed:3})
-    const leadChanges = changes.filter(change => change.table === leads)
+    const leadChanges = changes.filter(change => change.table === leads && 'noContact' in change.value)
+    const assessments = changes.filter(change => change.table === leads && 'sourceFields' in change.value)
+    expect(assessments).toHaveLength(3)
+    expect(JSON.parse(assessments[0].value.sourceFields as string).legacySourceFields).toBe('invalid json')
+    expect(JSON.parse(assessments[1].value.sourceFields as string).assessment).toMatchObject({locationEvidence:'unverified',buyerFit:'potential'})
+    expect(JSON.parse(assessments[1].value.sourceFields as string).sourceUrl).toBe('https://www.instagram.com/explore/')
     expect(leadChanges).toHaveLength(1)
     expect(leadChanges[0].value).toMatchObject({noContact:true,noContactReason:'Fora do segmento da busca: condomínios'})
     expect(leadChanges[0].value).not.toHaveProperty('leadStatus')

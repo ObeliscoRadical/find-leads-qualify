@@ -1,3 +1,4 @@
+import { assessDiscoveryProfile, QUALIFICATION_REVIEW_REASON } from './qualification';
 import { and, eq, desc, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { jobs, leads } from '@/db/schema';
@@ -39,7 +40,13 @@ export async function claimDiscovery(organizationId: string) {
         id: string;
         payload: string;
     } | undefined;
-    return row ? { id: row.id, ...JSON.parse(row.payload) } : null;
+    if (!row) return null;
+    // Include already known handles (including opted-out / no-contact leads) so
+    // the browser spends the search budget on new prospects instead of repeats.
+    const known = await getDb().select({ username: leads.instagramUsername }).from(leads)
+        .where(eq(leads.organizationId, organizationId)).orderBy(desc(leads.createdAt)).limit(1000);
+    const existingUsernames = known.flatMap(lead => lead.username ? [lead.username.toLowerCase()] : []);
+    return { id: row.id, ...JSON.parse(row.payload), existingUsernames };
 }
 export async function finishDiscovery(organizationId: string, input: z.infer<typeof resultSchema>) {
     return getDb().transaction(async (tx) => {
@@ -57,7 +64,8 @@ export async function finishDiscovery(organizationId: string, input: z.infer<typ
             const existing = await tx.select({ id: leads.id }).from(leads).where(and(eq(leads.organizationId, organizationId), sql `lower(${leads.instagramUsername})=${profile.username}`)).limit(1);
             if (existing.length)
                 continue;
-            const result = await tx.insert(leads).values({ id: `lead_${crypto.randomUUID().replace(/-/g, '')}`, organizationId, sourceType: 'instagram_browser', sourceExternalId: profile.username, instagramUsername: profile.username, instagramDisplayName: profile.displayName || null, instagramBio: profile.bio || null, instagramProfileUrl: `https://www.instagram.com/${profile.username}/`, sourceFields: JSON.stringify({ discoveryJobId: job.id, sourceUrl: profile.sourceUrl, keywords: payload.keywords, location: payload.location }), icpMatchScore: String(calculateICPScore({ companyNiche: payload.keywords, leadBio: profile.bio })), icpSegment: payload.keywords }).onConflictDoNothing().returning({ id: leads.id });
+            const assessment = assessDiscoveryProfile(profile.bio || '', payload.keywords || '', payload.location || '');
+            const result = await tx.insert(leads).values({ id: `lead_${crypto.randomUUID().replace(/-/g, '')}`, organizationId, sourceType: 'instagram_browser', sourceExternalId: profile.username, instagramUsername: profile.username, instagramDisplayName: profile.displayName || null, instagramBio: profile.bio || null, instagramProfileUrl: `https://www.instagram.com/${profile.username}/`, sourceFields: JSON.stringify({ discoveryJobId: job.id, sourceUrl: profile.sourceUrl, keywords: payload.keywords, location: payload.location, assessment }), noContact: assessment.buyerFit === 'service_provider', noContactReason: assessment.buyerFit === 'service_provider' ? `${QUALIFICATION_REVIEW_REASON}${assessment.reasons[1]}` : null, icpMatchScore: String(calculateICPScore({ companyNiche: payload.keywords, leadBio: profile.bio })), icpSegment: payload.keywords }).onConflictDoNothing().returning({ id: leads.id });
             inserted += result.length;
         }
         const summary = { inserted, existing: profiles.length - inserted, found: profiles.length, rejected, ingressRejected: rejected };
@@ -110,11 +118,26 @@ export async function reviewDiscovery(organizationId: string, jobId: string) {
         let valid = 0
         let rejected = 0
         for (const lead of associated) {
+            const assessment = assessDiscoveryProfile(lead.instagramBio || '', payload.keywords || '', payload.location || '');
+            let sourceFields: Record<string, unknown> = {};
+            try {
+                const parsedFields = JSON.parse(lead.sourceFields || '{}');
+                if (parsedFields && typeof parsedFields === 'object' && !Array.isArray(parsedFields)) sourceFields = parsedFields;
+                else if (lead.sourceFields) sourceFields = { legacySourceFields: lead.sourceFields };
+            } catch { sourceFields = { legacySourceFields: lead.sourceFields }; }
+            await tx.update(leads).set({sourceFields: JSON.stringify({...sourceFields, assessment}), updatedAt: new Date()})
+                .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)));
+            // Apply only our own reversible restriction, preserving opt-outs and unrelated restrictions.
+            if (lead.leadStatus !== 'opted_out' && ((!lead.noContact && assessment.buyerFit === 'service_provider') || lead.noContactReason?.startsWith(QUALIFICATION_REVIEW_REASON))) {
+                const needsReview = assessment.buyerFit === 'service_provider';
+                await tx.update(leads).set({noContact: needsReview, noContactReason: needsReview ? `${QUALIFICATION_REVIEW_REASON}${assessment.reasons[1]}` : null, updatedAt: new Date()})
+                    .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)));
+            }
             if (segmentMatches(`${lead.instagramUsername || ''} ${lead.instagramDisplayName || ''} ${lead.instagramBio || ''}`, payload.keywords || '')) {
                 valid++
                 // Preserve user opt-outs and every unrelated contact restriction.
                 if (lead.leadStatus !== 'opted_out' && lead.noContactReason?.startsWith(OUTSIDE_SEGMENT_REASON)) {
-                    await tx.update(leads).set({noContact: false, noContactReason: null, updatedAt: new Date()})
+                    await tx.update(leads).set({noContact: assessment.buyerFit === 'service_provider', noContactReason: assessment.buyerFit === 'service_provider' ? `${QUALIFICATION_REVIEW_REASON}${assessment.reasons[1]}` : null, updatedAt: new Date()})
                         .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)))
                 }
             } else {

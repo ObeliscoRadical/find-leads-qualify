@@ -1,4 +1,6 @@
-import { requireWorker } from '@/lib/discovery/auth';
+import { getMonitoredInstagramLeads } from '@/lib/leads/contact-store';
+import { enqueueScheduledDiscovery } from '@/lib/discovery/schedule';
+import { requireWorker, renewWorkerToken } from '@/lib/discovery/auth';
 import { jsonError, parseJson } from '@/lib/api';
 import { claimDiscovery, finishDiscovery, touchWorker, renewDiscovery } from '@/lib/discovery/jobs';
 import { z } from 'zod';
@@ -9,7 +11,8 @@ export async function GET(request: Request) {
     if (!worker)
         return jsonError('Conexão do Chrome inválida ou expirada.', 401);
     await touchWorker(worker.organizationId);
-    return Response.json({ job: await claimDiscovery(worker.organizationId) }, { headers: { 'Cache-Control': 'no-store' } });
+    await enqueueScheduledDiscovery(worker.organizationId);
+    return Response.json({ ...renewWorkerToken(worker), job: await claimDiscovery(worker.organizationId), monitoredLeads: await getMonitoredInstagramLeads(worker.organizationId) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 export async function POST(request: Request) {
     const worker = await requireWorker(request);

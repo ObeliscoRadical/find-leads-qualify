@@ -1,5 +1,7 @@
 'use client'
 
+import { leadAssessment } from '@/lib/leads/contact'
+import ContactPanel from './contact-panel'
 import DiscoveryPanel from './discovery-panel'
 import BackButton from '../back-button'
 
@@ -17,6 +19,7 @@ type Lead = {
   leadStatus: LeadStatus
   leadType: string
   sourceType: string
+  sourceFields: string | null
   icpMatchScore: string | null
   createdAt: string
   noContact: boolean | null
@@ -50,6 +53,7 @@ const emptyForm = {
 }
 
 export default function LeadsPage() {
+  const [contactLeadId, setContactLeadId] = useState<string | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
@@ -211,7 +215,7 @@ export default function LeadsPage() {
             <p className="muted compact">{loading ? 'A carregar...' : `${total} lead(s) encontrados`}</p>
             <div className="lead-table">
               {leads.map((lead) => (
-                <article key={lead.id} className="lead-row">
+                <article key={lead.id} className="lead-row" style={{ flexWrap: 'wrap' }}>
                   <div>
                     <strong>{lead.contactName || lead.instagramDisplayName || lead.instagramUsername || lead.contactEmail || 'Lead sem nome'}</strong>
                     {lead.instagramUsername ? <a href={lead.instagramProfileUrl || `https://www.instagram.com/${lead.instagramUsername}/`} target="_blank" rel="noopener noreferrer">@{lead.instagramUsername}</a> : null}
@@ -219,12 +223,15 @@ export default function LeadsPage() {
                   </div>
                   <div className="lead-row-meta">
                     <span className="status-pill">{statusLabels[lead.leadStatus]}</span>
+                    {leadAssessment(lead.sourceFields) ? <><span className="status-pill">{leadAssessment(lead.sourceFields)?.locationEvidence === 'confirmed' ? 'Região confirmada' : 'Região por confirmar'}</span>{leadAssessment(lead.sourceFields)?.requiresReview ? <span className="status-pill">Rever adequação</span> : null}</> : null}
                     {lead.noContact && lead.noContactReason?.startsWith('Fora do segmento da busca: ') ? <span className="status-pill">Fora do segmento</span> : null}
-                    <span>{lead.icpMatchScore ? `${Math.round(Number(lead.icpMatchScore) * 100)}% ICP` : 'ICP por definir'}</span>
+                    <span>{lead.icpMatchScore ? `${Math.round(Number(lead.icpMatchScore) * 100)}% ICP heurístico` : 'ICP heurístico por definir'}</span>
+                    <button className="secondary-button small-button" onClick={() => setContactLeadId(contactLeadId === lead.id ? null : lead.id)}>Contacto / conversa</button>
                     <button className="secondary-button small-button" onClick={() => void deleteLead(lead.id)}>
                       Apagar
                     </button>
                   </div>
+                  {contactLeadId === lead.id ? <div style={{ flexBasis: '100%' }}><ContactPanel lead={lead} onUpdate={loadLeads} /></div> : null}
                 </article>
               ))}
               {!loading && leads.length === 0 ? <p className="muted">Sem leads para estes filtros.</p> : null}

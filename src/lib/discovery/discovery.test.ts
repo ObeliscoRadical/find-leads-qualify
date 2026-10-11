@@ -4,7 +4,7 @@ import { discoverySchema, profileSchema } from './validation';
 vi.mock('@/db/queries', () => ({ getMembership: vi.fn() }));
 vi.mock('@/lib/env', () => ({ getEnv: () => ({ JWT_SECRET: 'a'.repeat(64) }) }));
 import { getMembership } from '@/db/queries';
-import { pairWorker, requireWorker } from './auth';
+import { pairWorker, requireWorker, renewWorkerToken } from './auth';
 const member = vi.mocked(getMembership);
 describe('organization-scoped Chrome pairing', () => {
     beforeEach(() => vi.clearAllMocks());
@@ -36,5 +36,19 @@ describe('real profile ingestion', () => {
     });
     it('caps each real search at 30 results', () => {
         expect(discoverySchema.safeParse({ keywords: 'condominios', limit: 31 }).success).toBe(false);
+    });
+});
+
+describe('same-scope worker rotation', () => {
+    it('only renews a valid near-expiry credential and preserves scope for seven days', async () => {
+        member.mockResolvedValue({role:'admin'} as Awaited<ReturnType<typeof getMembership>>);
+        const token = jwt.sign({purpose:'discovery_worker', organizationId:'org_one', userId:'usr_one'}, 'a'.repeat(64), {expiresIn:3600});
+        const worker = await requireWorker(new Request('https://app', {headers:{Authorization:`Bearer ${token}`}}));
+        const renewed = renewWorkerToken(worker!);
+        const payload = jwt.verify(renewed!.renewedToken, 'a'.repeat(64)) as jwt.JwtPayload;
+        expect(payload).toMatchObject({purpose:'discovery_worker', organizationId:'org_one', userId:'usr_one'});
+        expect(payload.exp! - payload.iat!).toBe(7 * 86400);
+        expect(renewWorkerToken({...worker!, exp:Math.floor(Date.now()/1000)+2*86400})).toBeNull();
+        expect(renewWorkerToken({...worker!, exp:Math.floor(Date.now()/1000)-1})).toBeNull();
     });
 });

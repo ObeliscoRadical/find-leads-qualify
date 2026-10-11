@@ -29,6 +29,7 @@ export const statusUpdateSchema = z.object({
 })
 
 export const messagePayloadSchema = z.object({
+  confirmedSent: z.boolean().default(false),
   role: z.enum(['user', 'assistant', 'system']).default('user'),
   content: z.string().trim().min(1).max(10000),
   sentVia: z.enum(['api', 'manual']).default('manual'),

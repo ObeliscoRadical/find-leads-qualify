@@ -24,20 +24,20 @@ export default async function QualificacaoPage() {
       userName={session.name}
       role={session.role}
       aiCredits={data.aiCredits}
-      headerTitle="Qualificação por IA"
-      headerSubtitle="Modelos de scoring e regras de ICP"
+      headerTitle="Avaliação preliminar"
+      headerSubtitle="Pontuação heurística e critérios de ICP"
     >
       <section className="fl-grid">
         <article className="fl-engine">
           <span className="scan" />
           <h2><i />Motor de qualificação {data.qualification.active ? 'ativo' : 'sem job ativo'}</h2>
-          <p>{data.qualification.active ? `Analisando ${data.qualification.pendingCompanies} tarefa(s) de IA pendente(s) contra o ICP configurado.` : 'Nenhum job de qualificação em execução neste momento.'}</p>
+          <p>{data.qualification.active ? `${data.qualification.pendingCompanies} tarefa(s) de qualificação pendente(s).` : 'Nenhum job de qualificação em execução neste momento.'}</p>
           <div><span>lote {data.qualification.currentBatch} de {data.qualification.totalBatches}</span><span>{data.qualification.progress}%</span></div>
           <progress value={data.qualification.progress} max="100" />
         </article>
 
         <article className="fl-card">
-          <div className="fl-card-head"><div><h2>Distribuição de score</h2><p>Leads reais da organização, agrupados por faixa de score preditivo</p></div></div>
+          <div className="fl-card-head"><div><h2>Pontuação heurística</h2><p>Perfis descobertos agrupados por pontuação heurística; a pontuação não comprova qualificação.</p></div></div>
           <div style={{ display: 'grid', gap: 12, padding: '4px 20px 20px' }}>
             {data.leads.length ? buckets.map((bucket) => (
               <div key={bucket.label}>
@@ -53,8 +53,8 @@ export default async function QualificacaoPage() {
 
       <section className="fl-grid">
         <article className="fl-card">
-          <div className="fl-card-head"><div><h2>Regras de ICP</h2><p>Critérios usados pelo motor de qualificação</p></div></div>
-          <p className="fl-empty">A configuração de regras de ICP personalizadas ainda não está disponível nesta versão. O score exibido acima vem do modelo de qualificação padrão já usado no restante do produto.</p>
+          <div className="fl-card-head"><div><h2>Regras de ICP</h2><p>Critérios da avaliação preliminar</p></div></div>
+          <p className="fl-empty">A configuração de regras de ICP personalizadas ainda não está disponível nesta versão. A pontuação exibida resulta das regras heurísticas de ICP; exige revisão do perfil antes do contacto.</p>
         </article>
       </section>
     </AppShell>

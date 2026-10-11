@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, useRef, type FormEvent } from 'react';
 type Job = {
     id: string;
     status: string;
@@ -20,6 +20,10 @@ export default function DiscoveryPanel({ onComplete }: {
 }) {
     const [keywords, setKeywords] = useState('condomínios, imobiliárias, escritórios');
     const [location, setLocation] = useState('Lisboa');
+    const [schedule, setSchedule] = useState<{enabled: boolean; intervalMinutes: number; keywords: string; location: string; nextRunAt: string | null} | null>(null);
+    const [intervalMinutes, setIntervalMinutes] = useState(60);
+    const initializedSchedule = useRef(false);
+    const [scheduleLoaded, setScheduleLoaded] = useState(false);
     const [jobs, setJobs] = useState<Job[]>([]);
     const [online, setOnline] = useState(false);
     const [connectionError, setConnectionError] = useState('');
@@ -32,6 +36,16 @@ export default function DiscoveryPanel({ onComplete }: {
             const data = await response.json();
             if (response.ok) {
                 setJobs(data.jobs || []);
+                setSchedule(data.schedule || null);
+                if (!initializedSchedule.current) {
+                    if (data.schedule) {
+                        setKeywords(data.schedule.keywords);
+                        setLocation(data.schedule.location);
+                        setIntervalMinutes(data.schedule.intervalMinutes);
+                    }
+                    initializedSchedule.current = true;
+                }
+                setScheduleLoaded(true);
                 setOnline(Boolean(data.worker?.online));
                 setConnectionError('');
             } else {
@@ -59,6 +73,17 @@ export default function DiscoveryPanel({ onComplete }: {
     finally {
         setBusy(false);
     } }
+    async function saveSchedule(enabled: boolean) {
+        setBusy(true); setMessage('');
+        try {
+            const response = await fetch('/api/discovery', {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled, intervalMinutes, keywords, location, limit: 10})});
+            const data = await response.json();
+            if (!response.ok) throw Error(data.error || 'Não foi possível salvar a busca automática.');
+            setSchedule(data.schedule);
+            setMessage(enabled ? 'Busca automática ativada. Mantenha o Mac e o conector Chrome ligados; a página pode ficar fechada.' : 'Novas buscas automáticas pausadas. Uma busca já iniciada pode terminar.');
+        } catch (error) { setMessage(error instanceof Error ? error.message : 'Falha de conexão.'); }
+        finally { setBusy(false); }
+    }
     async function review(jobId: string) {
         setMessage('');
         try {
@@ -100,6 +125,12 @@ export default function DiscoveryPanel({ onComplete }: {
    <div className="two-col"><label>Quem procura?<input required minLength={3} maxLength={300} value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="gestores de condomínios, escritórios"/></label><label>Região<input maxLength={100} value={location} onChange={e => setLocation(e.target.value)} placeholder="Lisboa"/></label></div>
    <div className="filters"><button className="primary-button" disabled={busy || jobs.some(j => ['pending', 'running'].includes(j.status))}>{busy ? 'A iniciar...' : 'Buscar 10 leads'}</button><button type="button" className="secondary-button" onClick={() => void pair()}>Conectar Chrome</button></div>
   </form>
+  <div className="form">
+   <label>Intervalo entre buscas automáticas<select value={intervalMinutes} onChange={e => setIntervalMinutes(Number(e.target.value))}><option value={30}>30 minutos</option><option value={60}>1 hora</option><option value={180}>3 horas</option><option value={360}>6 horas</option><option value={1440}>1 dia</option></select></label>
+   <div className="filters"><button type="button" className="primary-button" disabled={busy || !scheduleLoaded} onClick={() => void saveSchedule(true)}>{schedule?.enabled ? 'Atualizar busca automática' : 'Ativar busca automática'}</button>{schedule?.enabled ? <button type="button" className="secondary-button" disabled={busy} onClick={() => void saveSchedule(false)}>Pausar busca automática</button> : null}</div>
+   <p role="status">{schedule?.enabled ? `Ativa: ${schedule.keywords} · ${schedule.location} · a cada ${schedule.intervalMinutes} minutos. Próxima: ${schedule.nextRunAt ? new Date(schedule.nextRunAt).toLocaleString('pt-PT') : 'ao conectar o Chrome'}.` : 'Busca automática pausada.'}</p>
+   <p className="muted">O Mac e o conector precisam permanecer ligados e com sessão Instagram válida. A busca guarda perfis e evita duplicados; não envia mensagens automaticamente.</p>
+  </div>
   {message ? <p role="status">{message}</p> : null}
   {connection ? <details><summary>Configuração do conector local</summary><label>Conexão do Chrome<textarea readOnly aria-label="Conexão do Chrome" rows={5} value={connection}/></label><button className="secondary-button" type="button" onClick={() => setConnection('')}>Ocultar conexão</button></details> : null}
   {jobs.slice(0, 5).map(job => <article key={job.id} className="lead-row"><div><strong>{job.payload.keywords}</strong><span>{job.payload.location} · {labels[job.status] || job.status}</span>{job.lastError ? <span role="alert">{job.lastError}</span> : null}</div><div>{job.payload.found !== undefined ? `${job.payload.found} encontrados · ${job.payload.inserted} novos · ${job.payload.existing || 0} existentes · ${job.payload.rejected || 0} fora do segmento` : null}{['completed', 'failed'].includes(job.status) ? <button type="button" className="secondary-button small-button" onClick={() => void review(job.id)}>Revalidar resultados</button> : null}</div></article>)}
