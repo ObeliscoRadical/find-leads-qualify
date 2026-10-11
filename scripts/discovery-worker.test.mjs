@@ -138,3 +138,13 @@ test('rotated credentials are persisted atomically privately without dropping co
     assert.equal(JSON.parse(await fs.readFile(config,'utf8')).token,'new')
   } finally { await fs.rm(dir,{recursive:true,force:true}) }
 })
+
+test('API timeout override accommodates long preparation and still aborts',async()=>{
+  const {requestApi} = await import('./discovery-worker.mjs')
+  const fetchImpl=async(_, {signal})=>new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>resolve({ok:true,json:async()=>({prepared:true})}),30)
+    signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason)},{once:true})
+  })
+  assert.deepEqual(await requestApi('https://example.test','secret','GET',undefined,{fetchImpl,timeoutMs:80}),{prepared:true})
+  await assert.rejects(requestApi('https://example.test','secret','GET',undefined,{fetchImpl,timeoutMs:5}),{name:'TimeoutError'})
+})

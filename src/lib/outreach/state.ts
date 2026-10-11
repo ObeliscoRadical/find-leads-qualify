@@ -39,3 +39,13 @@ export function verifiedServiceRegion(lead: {sourceFields: string | null; instag
 // Classification budget is separate from the daily confirmed/uncertain send cap.
 export const MAX_CLASSIFICATIONS_PER_DAY = 20
 export function canClassifyDaily(attempts: number) { return attempts < MAX_CLASSIFICATIONS_PER_DAY }
+
+export function canRetryClassification(job: {status:string;attempts:number|null;payload:string|null;createdAt:Date;startedAt:Date|null},now:Date,timezone:string) {
+  if (job.status !== 'failed' || (job.attempts || 0) !== 0) return false
+  const payload = readObject(job.payload)
+  if (payload.outcome || Number(payload.classificationAttempts || 1) >= 3) return false
+  const previous = new Date(String(payload.lastClassificationAt || job.startedAt?.toISOString() || job.createdAt.toISOString()))
+  if (!Number.isFinite(previous.getTime())) return false
+  const day = (date:Date) => new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(date)
+  return previous.getTime() < now.getTime() && day(previous) !== day(now)
+}

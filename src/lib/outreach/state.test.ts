@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest'
-import {completionSchema,eligibleLead,operatingHours,outreachConfigSchema,verifiedServiceRegion,canClassifyDaily} from './state'
+import {completionSchema,eligibleLead,operatingHours,outreachConfigSchema,verifiedServiceRegion,canClassifyDaily,canRetryClassification} from './state'
 const lead = {leadStatus:'new',noContact:false,noContactReason:null,sourceFields:null,instagramUsername:'empresa',instagramProfileUrl:'https://www.instagram.com/empresa/'}
 it('permits cleaning provider block reversal only for the precise system-owned assessment',()=>{
   expect(eligibleLead(lead)).toBe(true)
@@ -34,4 +34,15 @@ it('uses a bounded classification budget separate from sent-message daily limit'
  expect(canClassifyDaily(1)).toBe(true)
  expect(canClassifyDaily(19)).toBe(true)
  expect(canClassifyDaily(20)).toBe(false)
+})
+
+it('retries failed AI classification on a later Lisbon day with no browser send attempt, at most three times',()=>{
+ const now=new Date('2026-10-12T10:00:00Z')
+ const failed={status:'failed',attempts:0,payload:JSON.stringify({classificationAttempts:1,lastClassificationAt:'2026-10-11T10:00:00Z'}),createdAt:new Date('2026-10-11T10:00:00Z'),startedAt:null}
+ expect(canRetryClassification(failed,now,'Europe/Lisbon')).toBe(true)
+ expect(canRetryClassification(failed,new Date('2026-10-11T15:00:00Z'),'Europe/Lisbon')).toBe(false)
+ for(const status of ['manual_review','completed','running','rejected'])expect(canRetryClassification({...failed,status},now,'Europe/Lisbon')).toBe(false)
+ expect(canRetryClassification({...failed,attempts:1},now,'Europe/Lisbon')).toBe(false)
+ expect(canRetryClassification({...failed,payload:JSON.stringify({classificationAttempts:3})},now,'Europe/Lisbon')).toBe(false)
+ expect(canRetryClassification({...failed,payload:JSON.stringify({outcome:'uncertain'})},now,'Europe/Lisbon')).toBe(false)
 })

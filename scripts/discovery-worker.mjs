@@ -208,7 +208,7 @@ async function main() {
       if (!job) {
         if (settings.automaticOutreachEnabled === true && !stopping) {
           const outreachEndpoint = new URL('/api/outreach/worker', settings.apiUrl)
-          const {job: outbound} = await requestApi(outreachEndpoint, settings.token, 'GET')
+          const {job: outbound} = await requestApi(outreachEndpoint, settings.token, 'GET', undefined, {timeoutMs:100000})
           if (outbound) {
             let outcome
             try {
