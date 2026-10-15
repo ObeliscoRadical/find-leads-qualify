@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 type Job = {id:string;status:string;lastError:string|null;payload:{username?:string;businessType?:string;reason?:string;message?:string}}
-const statuses: Record<string,string> = {classifying:'IA a analisar',ready:'Preparado para envio',running:'Chrome a enviar',completed:'Enviado e confirmado',rejected:'IA não selecionou',failed:'Falha na IA',manual_review:'Verificar manualmente — sem reenvio'}
+const statuses: Record<string,string> = {classifying:'IA a analisar',ready:'Preparado para envio',running:'Chrome a enviar',completed:'Enviado e confirmado',rejected:'IA não selecionou',failed:'Falha na IA',manual_review:'Verificar manualmente — sem reenvio',not_sent:'Envio não iniciado — rever perfil'}
 export default function OutreachPanel() {
   const [config,setConfig] = useState({enabled:false,maxDaily:5})
   const [ready,setReady] = useState(false)

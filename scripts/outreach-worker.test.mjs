@@ -51,19 +51,19 @@ test('localized recipient labels match exact usernames without wildcard dots',as
  assert.equal(recipientLabel('lead.name').test('Open the profile page of leadXname'),false)
 })
 
-function renderedConversation({persist=true,sender='obeliscoradical',duplicate=false,author='obeliscoradical'}={}) {
- let value='',text=duplicate?job.content:null,sent=false,reopened=0
+function renderedConversation({persist=true,sender='obeliscoradical',duplicate=false,author='obeliscoradical',priorityChoice=false}={}) {
+ let value='',text=duplicate?job.content:null,sent=false,reopened=0,ordinaryChosen=0
  const link={getAttribute:async()=>'/lead/'}
  const recipient={filter(){return this},first(){return this},waitFor:async()=>{},all:async()=>[link]}
  const composer={waitFor:async()=>{},count:async()=>1,fill:async v=>value=v,innerText:async()=>value,press:async()=>{text=value;value='';sent=true}}
  const senderLink={first(){return this},waitFor:async()=>{},getAttribute:async()=>`/${sender}/`}
  const page={
   goto:async url=>{if(url.includes('/direct/t/')&&sent){reopened++;if(!persist)text=null}},url:()=> 'https://www.instagram.com/lead/',
-  getByRole:(role,{name}={})=>role==='button'?{first(){return this},waitFor:async()=>{},count:async()=>1,click:async()=>{}}:name?.source?.startsWith('^Foto')?senderLink:recipient,
+  getByRole:(role,{name}={})=>role==='button'&&name?.source?.includes('Enviar solicitação de contato')?{waitFor:async()=>{if(!priorityChoice)throw Error('no dialog')},count:async()=>1,click:async()=>ordinaryChosen++}:role==='button'?{first(){return this},waitFor:async()=>{},count:async()=>1,click:async()=>{}}:name?.source?.startsWith('^Foto')?senderLink:recipient,
   locator:selector=>selector.includes('contenteditable')?composer:{evaluateAll:async()=>['/direct/t/123/']},
   getByText:content=>({first(){return this},waitFor:async()=>{if(text!==content)throw Error('not rendered')},count:async()=>text===content?1:0,evaluate:async(fn,expected)=>author===expected}),
  }
- return {page,get reopened(){return reopened}}
+ return {page,get reopened(){return reopened},get ordinaryChosen(){return ordinaryChosen}}
 }
 
 test('real adapter confirms only new text persisted after reopening the verified conversation',async()=>{
@@ -97,4 +97,11 @@ test('partial fill failure clears pending text before Enter',async()=>{
  let cleared=0
  const result=await sendOutreach(adapter({fill:async()=>{throw Error('partial fill')},clear:async()=>cleared++}),job,{authorize:async()=>true})
  assert.equal(result.attemptedSend,false);assert.equal(cleared,1)
+})
+
+test('opens only the ordinary contact request when Instagram offers priority messaging',async()=>{
+ const {chromeOutreachAdapter}=await import('./outreach-worker.mjs')
+ const fixture=renderedConversation({priorityChoice:true})
+ const result=await sendOutreach(chromeOutreachAdapter(fixture.page,{expectedSender:'obeliscoradical'}),job,{authorize:async()=>true})
+ assert.equal(result.status,'sent');assert.equal(fixture.ordinaryChosen,1)
 })

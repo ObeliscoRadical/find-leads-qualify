@@ -58,3 +58,11 @@ it('backs provider outages off independently without changing classification or 
  expect(Date.parse(second.retryAt)-(now+60000)).toBe(120000)
  expect(Date.parse(nextProviderPause({failures:10},'down',now).retryAt)-now).toBe(1800000)
 })
+
+it('counts ambiguous attempts separately from verified pre-send failures',async()=>{
+ const {unsuccessfulOutreachStatus}=await import('./state')
+ expect(unsuccessfulOutreachStatus({outcome:'failed',attemptedSend:false})).toBe('not_sent')
+ expect(unsuccessfulOutreachStatus({outcome:'failed'})).toBe('manual_review')
+ expect(unsuccessfulOutreachStatus({outcome:'uncertain',attemptedSend:false})).toBe('manual_review')
+ expect(unsuccessfulOutreachStatus({outcome:'failed',attemptedSend:true})).toBe('manual_review')
+})

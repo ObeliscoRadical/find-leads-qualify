@@ -5,7 +5,7 @@ import { normalizeSearch } from '@/lib/discovery/segment'
 export const outreachConfigSchema = z.object({ enabled: z.boolean().default(false), maxDaily: z.number().int().min(1).max(5).default(5) })
 export const completionSchema = z.object({
   jobId: z.string().min(1).max(200), claimToken: z.string().uuid(),
-  outcome: z.enum(['sent', 'uncertain', 'failed']),
+  outcome: z.enum(['sent', 'uncertain', 'failed']), attemptedSend: z.boolean().optional(),
   threadUrl: z.string().url().max(500).optional(), externalId: z.string().trim().min(1).max(255).optional(), error: z.string().trim().max(1500).optional(),
 }).superRefine((value, ctx) => {
   if (value.outcome !== 'sent') return
@@ -60,4 +60,8 @@ export function providerPauseState(payload: Record<string, unknown>, now = Date.
 export function nextProviderPause(previous: Record<string, unknown>, message: string, now = Date.now()) {
   const failures = providerPauseState(previous, now).failures + 1
   return {failures, message, retryAt: new Date(now + Math.min(30 * 60, 60 * 2 ** Math.min(failures - 1, 5)) * 1000).toISOString()}
+}
+
+export function unsuccessfulOutreachStatus(input: {outcome:string;attemptedSend?:boolean}) {
+  return input.outcome === 'failed' && input.attemptedSend === false ? 'not_sent' : 'manual_review'
 }

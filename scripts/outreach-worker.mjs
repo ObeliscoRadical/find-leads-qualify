@@ -60,6 +60,10 @@ export function chromeOutreachAdapter(page, {expectedSender} = {}) {
       await button.first().waitFor({state:'visible',timeout:30000})
       if (await button.count() !== 1) throw new Error('Botão de mensagem indisponível ou ambíguo.')
       await button.click()
+      // Some professional accounts offer priority messaging first. Choose only
+      // the ordinary contact request; this opens the editor, never sends text.
+      const ordinaryRequest = page.getByRole('button',{name:/^(Enviar solicitação de contato|Enviar pedido de contacto|Send message request|Send contact request)$/i})
+      try { await ordinaryRequest.waitFor({state:'visible',timeout:3000}); if(await ordinaryRequest.count()===1) await ordinaryRequest.click() } catch {}
       await verifyRecipient(profile.username)
       const hrefs = await page.locator('a[href*="/direct/t/"]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('href')))])
       const threads = [...new Set(hrefs.map(href => threadFromUrl(new URL(href,'https://www.instagram.com').toString())).filter(Boolean))]

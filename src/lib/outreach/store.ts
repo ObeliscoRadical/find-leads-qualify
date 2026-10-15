@@ -3,7 +3,7 @@ import { getDb } from '@/db'
 import { jobs, leads, messages } from '@/db/schema'
 import { getEnv } from '@/lib/env'
 import { aiProviderReady, classifyAndDraft, validateOutreachDraft, ensureProviderAvailable, ProviderUnavailableError } from './ai'
-import { completionSchema, outreachConfigSchema, readObject, removableProviderBlock, eligibleLead, operatingHours, verifiedServiceRegion, canClassifyDaily, canRetryClassification, providerPauseState, nextProviderPause } from './state'
+import { completionSchema, outreachConfigSchema, readObject, removableProviderBlock, eligibleLead, operatingHours, verifiedServiceRegion, canClassifyDaily, canRetryClassification, providerPauseState, nextProviderPause, unsuccessfulOutreachStatus } from './state'
 import { instagramContactUrl } from '@/lib/leads/contact'
 import { z } from 'zod'
 const configId = (org: string) => `outreach_config_${org}`
@@ -111,6 +111,10 @@ export async function claimOutreach(org: string) {
     const paused = await finishProviderProbe(org,probe.token,error instanceof ProviderUnavailableError ? error.message : 'IA indisponível. Análises pausadas.')
     return {job:null,config,providerReady,providerState:paused,lastError:paused.message}
   }
+  // The legacy adapter reports failed only before its Enter boundary. This
+  // specific header timeout never typed or attempted a message; retain the row
+  // for review without counting it as a possible delivery or retrying it.
+  await getDb().update(jobs).set({status:'not_sent'}).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),eq(jobs.status,'manual_review'),sql`${jobs.payload}::jsonb->>'outcome' = 'failed'`,sql`${jobs.lastError} LIKE 'locator.waitFor: Timeout%Open the profile page of%heading%'`,sql`NOT EXISTS (SELECT 1 FROM ${messages} WHERE ${messages.id} = 'msg_outreach_' || ${jobs.id})`))
   await getDb().update(jobs).set({status:'manual_review', finishedAt: new Date(), lastError:'Conexão perdida durante envio. Verifique a conversa; nunca será reenviado automaticamente.'}).where(and(eq(jobs.organizationId, org), eq(jobs.kind,'outreach'), eq(jobs.status,'running'), sql`${jobs.startedAt} < now()-interval '5 minutes'`))
   await getDb().update(jobs).set({status:'failed', finishedAt: new Date(), lastError:'Classificação IA interrompida.'}).where(and(eq(jobs.organizationId, org), eq(jobs.kind,'outreach'), eq(jobs.status,'classifying'), sql`${jobs.startedAt} < now()-interval '2 minutes'`))
   // Separate bounded AI classification budget, counting failed and rejected attempts.
@@ -155,7 +159,7 @@ export async function completeOutreach(org: string, input: z.infer<typeof comple
     const [lead] = await tx.select().from(leads).where(and(eq(leads.id,job.leadId!),eq(leads.organizationId,org))).for('update')
     const sent = input.outcome === 'sent'
     if (!sent || !lead || lead.noContact || lead.leadStatus === 'opted_out') {
-      await tx.update(jobs).set({status:'manual_review',finishedAt:new Date(),lastError:input.error || 'Envio não confirmado. Verifique o Instagram antes de qualquer contacto.',payload:JSON.stringify({...payload,outcome:input.outcome,threadUrl:input.threadUrl})}).where(eq(jobs.id,job.id))
+      await tx.update(jobs).set({status:unsuccessfulOutreachStatus(input),finishedAt:new Date(),lastError:input.error || 'Envio não confirmado. Verifique o Instagram antes de qualquer contacto.',payload:JSON.stringify({...payload,outcome:input.outcome,attemptedSend:input.attemptedSend,threadUrl:input.threadUrl})}).where(eq(jobs.id,job.id))
       return {recorded:false,manualReview:true}
     }
     await tx.insert(messages).values({id:`msg_outreach_${job.id}`,organizationId:org,leadId:lead.id,role:'assistant',content:String(payload.message),sentVia:'instagram_browser_ai',isFromLead:false,instagramMessageId:input.externalId || null}).onConflictDoNothing()

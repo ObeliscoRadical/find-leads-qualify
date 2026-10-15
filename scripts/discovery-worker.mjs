@@ -253,8 +253,8 @@ async function main() {
                   console.log(`Comprovativo do contacto @${outbound.username} guardado em .discovery/evidence.`)
                 } catch { console.warn('Mensagem confirmada; comprovativo visual não ficou disponível.') }
               }
-              outcome = {outcome:result.status === 'sent' ? 'sent' : result.status === 'manual_review' ? 'uncertain' : 'failed', ...(result.threadUrl ? {threadUrl:result.threadUrl} : {}), ...(result.error ? {error:result.error} : {})}
-            } catch (error) { outcome = {outcome:'failed',error:String(error.message).slice(0,500)} }
+              outcome = {attemptedSend:result.attemptedSend,outcome:result.status === 'sent' ? 'sent' : result.status === 'manual_review' ? 'uncertain' : 'failed', ...(result.threadUrl ? {threadUrl:result.threadUrl} : {}), ...(result.error ? {error:result.error} : {})}
+            } catch (error) { outcome = {outcome:'uncertain',attemptedSend:true,error:String(error.message).slice(0,500)} }
             await requestApi(outreachEndpoint, settings.token, 'POST', {jobId:outbound.id,claimToken:outbound.claimToken,...outcome})
             console.log(`Primeiro contato @${outbound.username}: ${outcome.outcome}; confira o histórico no aplicativo.`)
           }
