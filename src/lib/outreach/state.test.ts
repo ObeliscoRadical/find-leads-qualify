@@ -46,3 +46,15 @@ it('retries failed AI classification on a later Lisbon day with no browser send 
  expect(canRetryClassification({...failed,payload:JSON.stringify({classificationAttempts:3})},now,'Europe/Lisbon')).toBe(false)
  expect(canRetryClassification({...failed,payload:JSON.stringify({outcome:'uncertain'})},now,'Europe/Lisbon')).toBe(false)
 })
+
+it('backs provider outages off independently without changing classification or send caps',async()=>{
+ const {nextProviderPause,providerPauseState}=await import('./state')
+ const now=Date.parse('2026-10-15T10:00:00Z')
+ const first=nextProviderPause({},'HTTP502',now)
+ expect(Date.parse(first.retryAt)-now).toBe(60000)
+ expect(providerPauseState(first,now).paused).toBe(true)
+ expect(providerPauseState(first,now+60000).paused).toBe(false)
+ const second=nextProviderPause(first,'HTTP502',now+60000)
+ expect(Date.parse(second.retryAt)-(now+60000)).toBe(120000)
+ expect(Date.parse(nextProviderPause({failures:10},'down',now).retryAt)-now).toBe(1800000)
+})

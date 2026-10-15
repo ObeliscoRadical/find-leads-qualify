@@ -49,3 +49,15 @@ export function canRetryClassification(job: {status:string;attempts:number|null;
   const day = (date:Date) => new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(date)
   return previous.getTime() < now.getTime() && day(previous) !== day(now)
 }
+
+export function providerPauseState(payload: Record<string, unknown>, now = Date.now()) {
+  const retryAt = typeof payload.retryAt === 'string' ? payload.retryAt : null
+  const probing = typeof payload.probeUntil === 'string' && Date.parse(payload.probeUntil) > now
+  return {paused: Boolean(probing || (retryAt && Date.parse(retryAt) > now)), retryAt: probing ? String(payload.probeUntil) : retryAt,
+    message: probing ? 'Verificação da IA em curso; sem novas reservas concorrentes.' : typeof payload.message === 'string' ? payload.message : null,
+    failures: Math.max(0, Math.min(10, Number(payload.failures) || 0))}
+}
+export function nextProviderPause(previous: Record<string, unknown>, message: string, now = Date.now()) {
+  const failures = providerPauseState(previous, now).failures + 1
+  return {failures, message, retryAt: new Date(now + Math.min(30 * 60, 60 * 2 ** Math.min(failures - 1, 5)) * 1000).toISOString()}
+}

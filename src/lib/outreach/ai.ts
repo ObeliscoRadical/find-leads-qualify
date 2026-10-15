@@ -1,5 +1,20 @@
 import { z } from 'zod'
 import { getEnv } from '@/lib/env'
+export class ProviderUnavailableError extends Error {
+  constructor(message: string) { super(message); this.name = 'ProviderUnavailableError' }
+}
+export async function ensureProviderAvailable() {
+  const env = providerConfig()
+  if (env.provider !== 'litellm') return
+  try {
+    const response = await fetch(env.url.replace(/\/chat\/completions$/, '/models'), {
+      headers:{Authorization:`Bearer ${env.key}`},signal:AbortSignal.timeout(10000),cache:'no-store',
+    })
+    if (!response.ok) throw new Error('unavailable')
+    const body = await response.json()
+    if (!Array.isArray(body.data) || !body.data.some((item: {id?:string}) => item.id === env.model)) throw new Error('model unavailable')
+  } catch { throw new ProviderUnavailableError('Gateway IA a iniciar ou indisponível. Nova tentativa automática após uma pausa; nenhum novo perfil foi reservado.') }
+}
 export const classificationSchema = z.object({
   businessType: z.enum(['condo_management', 'cleaning_services', 'real_estate', 'office', 'other']),
   qualified: z.boolean(), reason: z.string().trim().min(1).max(1500),
@@ -41,14 +56,19 @@ model: env.model, max_completion_tokens: 2000,
         required: ['businessType','qualified','reason','message'],
       } } },
   }
-  const call = (body: unknown) => fetch(env.url, { method:'POST', signal:AbortSignal.timeout(45000), headers:{Authorization:`Bearer ${env.key}`,'Content-Type':'application/json'},body:JSON.stringify(body) })
+  const call = async (body: unknown) => {
+    try { return await fetch(env.url, { method:'POST', signal:AbortSignal.timeout(45000), headers:{Authorization:`Bearer ${env.key}`,'Content-Type':'application/json'},body:JSON.stringify(body) }) }
+    catch { throw new ProviderUnavailableError('IA sem resposta no prazo. Novas análises foram pausadas automaticamente.') }
+  }
   let response = await call(requestBody)
   if (env.provider === 'litellm' && response.status === 400) {
-    const detail = await response.text()
+    let detail: string
+    try { detail = await response.text() } catch { throw new ProviderUnavailableError('Resposta do servidor IA interrompida. Análises pausadas.') }
     if (/response_format|json_schema|structured.output/i.test(detail) && /unsupported|not.supported|invalid|does.not.support/i.test(detail)) response = await call({...requestBody,response_format:{type:'json_object'}})
   }
-  if (!response.ok) throw new Error(`Classificação IA indisponível (HTTP ${response.status}).`)
-  const body = await response.json()
+  if (!response.ok) throw new ProviderUnavailableError(`Classificação IA indisponível (HTTP ${response.status}).`)
+  let body
+  try { body = await response.json() } catch { throw new ProviderUnavailableError('Resposta do servidor IA interrompida ou inválida. Análises pausadas.') }
   const choice = body.choices?.[0]
   if (choice?.message?.refusal || choice?.finish_reason !== 'stop' || !choice?.message?.content) throw new Error('A IA não devolveu uma classificação completa.')
   const result = classificationSchema.parse(JSON.parse(choice.message.content))

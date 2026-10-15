@@ -2,11 +2,42 @@ import { and, eq, desc, inArray, sql } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { jobs, leads, messages } from '@/db/schema'
 import { getEnv } from '@/lib/env'
-import { aiProviderReady, classifyAndDraft, validateOutreachDraft } from './ai'
-import { completionSchema, outreachConfigSchema, readObject, removableProviderBlock, eligibleLead, operatingHours, verifiedServiceRegion, canClassifyDaily, canRetryClassification } from './state'
+import { aiProviderReady, classifyAndDraft, validateOutreachDraft, ensureProviderAvailable, ProviderUnavailableError } from './ai'
+import { completionSchema, outreachConfigSchema, readObject, removableProviderBlock, eligibleLead, operatingHours, verifiedServiceRegion, canClassifyDaily, canRetryClassification, providerPauseState, nextProviderPause } from './state'
 import { instagramContactUrl } from '@/lib/leads/contact'
 import { z } from 'zod'
 const configId = (org: string) => `outreach_config_${org}`
+const providerStateId = (org: string) => `outreach_provider_${org}`
+export async function getOutreachProviderState(org: string) {
+  const [row] = await getDb().select().from(jobs).where(and(eq(jobs.id,providerStateId(org)),eq(jobs.organizationId,org)))
+  return providerPauseState(readObject(row?.payload || null))
+}
+export async function acquireProviderProbe(org: string) {
+  return getDb().transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
+    const [row] = await tx.select().from(jobs).where(and(eq(jobs.id,providerStateId(org)),eq(jobs.organizationId,org)))
+    const payload = readObject(row?.payload || null)
+    const state = providerPauseState(payload)
+    if (state.paused) return {admitted:false as const,state}
+    const token = crypto.randomUUID()
+    const next = {...payload,probeToken:token,probeUntil:new Date(Date.now()+120000).toISOString()}
+    await tx.insert(jobs).values({id:providerStateId(org),organizationId:org,kind:'outreach_provider',status:'completed',payload:JSON.stringify(next)})
+      .onConflictDoUpdate({target:jobs.id,set:{payload:JSON.stringify(next)}})
+    return {admitted:true as const,state,token}
+  })
+}
+export async function finishProviderProbe(org: string, token: string, error?: string) {
+  return getDb().transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
+    const [row] = await tx.select().from(jobs).where(and(eq(jobs.id,providerStateId(org)),eq(jobs.organizationId,org)))
+    const previous = readObject(row?.payload || null)
+    if (previous.probeToken !== token) return providerPauseState(previous)
+    const next = error ? nextProviderPause(previous,error) : {failures:0,retryAt:null,message:null}
+    await tx.insert(jobs).values({id:providerStateId(org),organizationId:org,kind:'outreach_provider',status:'completed',payload:JSON.stringify(next)})
+      .onConflictDoUpdate({target:jobs.id,set:{payload:JSON.stringify(next)}})
+    return providerPauseState(next)
+  })
+}
 export async function getOutreachConfig(org: string) {
   const [row] = await getDb().select().from(jobs).where(and(eq(jobs.id, configId(org)), eq(jobs.organizationId, org)))
   const parsed = outreachConfigSchema.safeParse(readObject(row?.payload || null))
@@ -24,16 +55,20 @@ export async function listOutreach(org: string) {
   return rows.map((row) => { const payload = readObject(row.payload); delete payload.claimToken; return {id: row.id, leadId: row.leadId, status: row.status, lastError: row.lastError, createdAt: row.createdAt, payload} })
 }
 // Classifications reserve their own row before calling AI, outside a DB transaction.
-async function prepareOne(org: string) {
+async function prepareOne(org: string, probeToken: string) {
   const reserved = await getDb().transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
     const config = await getOutreachConfig(org)
     const env = getEnv()
     const reservedToday = await tx.select({id:jobs.id}).from(jobs).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),sql`COALESCE((${jobs.payload}::jsonb->>'lastClassificationAt')::timestamptz,${jobs.createdAt}) >= date_trunc('day', now() AT TIME ZONE ${env.OPERATING_TIMEZONE}) AT TIME ZONE ${env.OPERATING_TIMEZONE}`))
     if (!config.enabled || !canClassifyDaily(reservedToday.length)) return null
-    const candidates = await tx.select().from(leads).where(and(eq(leads.organizationId, org), eq(leads.leadStatus, 'new'), eq(leads.sourceType, 'instagram_browser'))).orderBy(leads.createdAt).limit(300)
+    const [provider] = await tx.select().from(jobs).where(and(eq(jobs.id,providerStateId(org)),eq(jobs.organizationId,org)))
+    const providerPayload = readObject(provider?.payload || null)
+    if (providerPayload.probeToken !== probeToken || Date.parse(String(providerPayload.probeUntil || '')) <= Date.now()) return null
+    for (let offset = 0; ; offset += 300) {
+    const candidates = await tx.select().from(leads).where(and(eq(leads.organizationId, org), eq(leads.leadStatus, 'new'), eq(leads.sourceType, 'instagram_browser'))).orderBy(leads.createdAt,leads.id).limit(300).offset(offset)
     for (const lead of candidates) {
-      if (!eligibleLead(lead)) continue
+      if (!eligibleLead(lead) || !verifiedServiceRegion(lead)) continue
       const id = `outreach_${lead.id}`
       const [existing] = await tx.select().from(jobs).where(eq(jobs.id, id))
       if (existing && !canRetryClassification(existing,new Date(),env.OPERATING_TIMEZONE)) continue
@@ -44,7 +79,8 @@ async function prepareOne(org: string) {
       else await tx.insert(jobs).values({ id, organizationId: org, leadId: lead.id, kind: 'outreach', status: 'classifying', startedAt: new Date(), maxAttempts: 1, payload })
       return {lead, id, claimToken}
     }
-    return null
+    if (candidates.length < 300) return null
+    }
   })
   if (!reserved) return
   try {
@@ -60,6 +96,7 @@ async function prepareOne(org: string) {
     })
   } catch (error) {
     await getDb().update(jobs).set({ status: 'failed', finishedAt: new Date(), lastError: error instanceof Error ? error.message.slice(0,1500) : 'Falha na classificação IA.' }).where(and(eq(jobs.id, reserved.id), eq(jobs.status, 'classifying')))
+    if (error instanceof ProviderUnavailableError) throw error
   }
 }
 export async function claimOutreach(org: string) {
@@ -68,11 +105,25 @@ export async function claimOutreach(org: string) {
   if (!config.enabled || !providerReady) return {job: null, config, providerReady, lastError: providerReady ? null : 'Chave de IA não configurada.'}
   const env = getEnv()
   if (!operatingHours(new Date(), env.OPERATING_TIMEZONE, env.OPERATING_HOURS_START, env.OPERATING_HOURS_END)) return {job:null, config, providerReady, lastError:'Fora do horário de envio configurado.'}
+  const probe = await acquireProviderProbe(org)
+  if (!probe.admitted) return {job:null,config,providerReady,providerState:probe.state,lastError:probe.state.message}
+  try { await ensureProviderAvailable() }
+  catch (error) {
+    const paused = await finishProviderProbe(org,probe.token,error instanceof ProviderUnavailableError ? error.message : 'IA indisponível. Análises pausadas.')
+    return {job:null,config,providerReady,providerState:paused,lastError:paused.message}
+  }
   await getDb().update(jobs).set({status:'manual_review', finishedAt: new Date(), lastError:'Conexão perdida durante envio. Verifique a conversa; nunca será reenviado automaticamente.'}).where(and(eq(jobs.organizationId, org), eq(jobs.kind,'outreach'), eq(jobs.status,'running'), sql`${jobs.startedAt} < now()-interval '5 minutes'`))
   await getDb().update(jobs).set({status:'failed', finishedAt: new Date(), lastError:'Classificação IA interrompida.'}).where(and(eq(jobs.organizationId, org), eq(jobs.kind,'outreach'), eq(jobs.status,'classifying'), sql`${jobs.startedAt} < now()-interval '2 minutes'`))
   // Separate bounded AI classification budget, counting failed and rejected attempts.
   const classifiedToday = await getDb().select({id: jobs.id}).from(jobs).where(and(eq(jobs.organizationId, org), eq(jobs.kind,'outreach'), sql`COALESCE((${jobs.payload}::jsonb->>'lastClassificationAt')::timestamptz,${jobs.createdAt}) >= date_trunc('day', now() AT TIME ZONE ${env.OPERATING_TIMEZONE}) AT TIME ZONE ${env.OPERATING_TIMEZONE}`))
-  if (canClassifyDaily(classifiedToday.length)) await prepareOne(org)
+  try {
+    if (canClassifyDaily(classifiedToday.length)) await prepareOne(org,probe.token)
+    await finishProviderProbe(org,probe.token)
+  } catch (error) {
+    if (!(error instanceof ProviderUnavailableError)) throw error
+    const paused = await finishProviderProbe(org,probe.token,error.message)
+    return {job:null,config,providerReady,providerState:paused,lastError:paused.message}
+  }
   const job = await getDb().transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
     const current = await getOutreachConfig(org)

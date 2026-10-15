@@ -5,11 +5,12 @@ const statuses: Record<string,string> = {classifying:'IA a analisar',ready:'Prep
 export default function OutreachPanel() {
   const [config,setConfig] = useState({enabled:false,maxDaily:5})
   const [ready,setReady] = useState(false)
+  const [providerState,setProviderState] = useState<{paused:boolean;retryAt:string|null;message:string|null}|null>(null)
   const [jobs,setJobs] = useState<Job[]>([])
   const [notice,setNotice] = useState('')
   const [saving,setSaving] = useState(false)
   const load = useCallback(async () => {
-    try { const response = await fetch('/api/outreach'); const body = await response.json(); if (!response.ok) {setNotice(body.error || 'Falha ao carregar envio automático.');return} setConfig(body.config);setReady(body.providerReady);setJobs(body.jobs || []) }
+    try { const response = await fetch('/api/outreach'); const body = await response.json(); if (!response.ok) {setNotice(body.error || 'Falha ao carregar envio automático.');return} setConfig(body.config);setReady(body.providerReady);setProviderState(body.providerState || null);setJobs(body.jobs || []) }
     catch { setNotice('Sem conexão com o envio automático.') }
   },[])
   useEffect(() => { const initial = setTimeout(() => void load(),0); const timer = setInterval(() => void load(),15000);return () => {clearTimeout(initial);clearInterval(timer)} },[load])
@@ -21,6 +22,7 @@ export default function OutreachPanel() {
   return <section className="form"><h2>Primeiro contacto automático com IA</h2>
     <p className="muted">A IA analisa a bio real, identifica condomínios, empresas de limpeza, imobiliárias ou escritórios e prepara uma mensagem elétrica adaptada. Empresas de limpeza podem receber proposta de parceria de apoio elétrico. O Chrome envia uma única primeira mensagem e regista apenas o envio confirmado.</p>
     <p>{config.enabled ? 'Ativo no servidor' : 'Desligado no servidor'} · {ready ? 'Chave IA disponível no servidor' : 'Configure a chave da IA no servidor'}</p>
+    {providerState?.paused ? <p role="alert">Análises pausadas: {providerState.message} Nova verificação: {providerState.retryAt ? new Date(providerState.retryAt).toLocaleString('pt-PT',{timeZone:'Europe/Lisbon'}) : 'automática'} (Lisboa).</p> : null}
     <label>Limite de primeiros contactos por dia (1 a 5)<input type="number" min="1" max="5" value={config.maxDaily} onChange={(event) => setConfig({...config,maxDaily:Number(event.target.value)})} /></label>
     <button type="button" className="primary-button" disabled={saving || (!config.enabled && !ready)} onClick={() => void save(!config.enabled)}>{saving ? 'A verificar IA...' : config.enabled ? 'Desligar primeiros contactos' : 'Verificar IA e ativar primeiros contactos'}</button>
     <p className="muted">O Mac e o Chrome dedicado precisam de estar ligados e o envio automático também precisa de estar autorizado na configuração local do conector. Ativar no servidor não altera essa autorização local. Horário padrão 09h–20h de Lisboa, com intervalo mínimo de 90 segundos. Falhas ou envios incertos ficam para revisão manual e nunca são reenviados automaticamente. Respostas chegam ao Instagram vinculado. Histórico automático no app depende da conexão Meta com permissões de mensagens. Sem resposta automática do bot. Até 20 perfis por dia podem ser analisados pela IA, mantendo separado o limite de mensagens.</p>

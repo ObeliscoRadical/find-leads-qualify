@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocked = vi.hoisted(() => ({getEnv:vi.fn()}))
 vi.mock('@/lib/env',()=>mocked)
-import { classifyAndDraft, aiProviderReady, validateOutreachDraft } from './ai'
+import { classifyAndDraft, aiProviderReady, validateOutreachDraft, ensureProviderAvailable, ProviderUnavailableError } from './ai'
 const classified = {businessType:'cleaning_services',qualified:true,reason:'A bio descreve uma empresa de limpeza.',message:'Olá! Sou Diego da Obelisco Radical. Prestamos apoio elétrico aos imóveis que a vossa equipa de limpeza atende. Faria sentido uma parceria?'}
 const completion = (value = classified) => Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(value)}}]})
 beforeEach(()=>{vi.restoreAllMocks();mocked.getEnv.mockReturnValue({LITELLM_API_KEY:'test-secret',LITELLM_BASE_URL:'https://gateway.example',LITELLM_MODEL:'obelisco-fast'})})
@@ -54,4 +54,25 @@ it('rejects structured but truncated messages and requires a complete simple que
  expect(()=>validateOutreachDraft('Olá! Sou Diego da Obelisco Radical. Quem costuma ser,')).toThrow('completa')
  expect(()=>validateOutreachDraft('Olá! Sou Diego da Obelisco Radical. Podemos apoiar a manutenção elétrica.')).toThrow('pergunta')
  expect(validateOutreachDraft(classified.message+' Obrigado!')).toContain('Obrigado!')
+})
+
+it('checks gateway readiness without classifying a profile and sanitizes network failures',async()=>{
+ const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response('unavailable',{status:503}))
+ await expect(ensureProviderAvailable()).rejects.toBeInstanceOf(ProviderUnavailableError)
+ expect(String(fetcher.mock.calls[0][0])).toBe('https://gateway.example/v1/models')
+ expect(fetcher.mock.calls[0][1]?.method).toBeUndefined()
+ fetcher.mockRejectedValue(new Error('private test-secret'))
+ await expect(classifyAndDraft({username:'empresa',name:'Empresa',bio:'Condomínios Lisboa'})).rejects.toThrow('Novas análises foram pausadas')
+})
+it('opens the provider circuit when headers arrive but the response body aborts',async()=>{
+ vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:true,status:200,json:async()=>{throw new DOMException('timeout','TimeoutError')}} as unknown as Response)
+ await expect(classifyAndDraft({username:'empresa',name:'Empresa',bio:'Condomínios Lisboa'})).rejects.toBeInstanceOf(ProviderUnavailableError)
+})
+
+it('requires authenticated model readiness rather than accepting a cold-start HTML page',async()=>{
+ const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response('<html>starting</html>',{status:200}))
+ await expect(ensureProviderAvailable()).rejects.toBeInstanceOf(ProviderUnavailableError)
+ fetcher.mockResolvedValue(Response.json({data:[{id:'obelisco-fast'}]}))
+ await expect(ensureProviderAvailable()).resolves.toBeUndefined()
+ expect(fetcher.mock.calls[0][1]?.headers).toEqual({Authorization:'Bearer test-secret'})
 })
