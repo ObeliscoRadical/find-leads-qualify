@@ -79,3 +79,13 @@ it('requires authenticated model readiness rather than accepting a cold-start HT
  await expect(ensureProviderAvailable()).resolves.toBeUndefined()
  expect(fetcher.mock.calls[0][1]?.headers).toEqual({Authorization:'Bearer test-secret'})
 })
+
+it('applies reasoning controls only when configured for the LiteLLM provider',async()=>{
+ mocked.getEnv.mockReturnValue({LITELLM_API_KEY:'test-secret',LITELLM_BASE_URL:'https://gateway.example',LITELLM_MODEL:'obelisco-fast',LITELLM_REASONING_EFFORT:'none'})
+ const fetcher=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>completion())
+ await classifyAndDraft({username:'limpeza',name:'Empresa',bio:'Empresa de limpeza'})
+ expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).reasoning_effort).toBe('none')
+ mocked.getEnv.mockReturnValue({OPENAI_API_KEY:'test',OPENAI_MODEL:'configured-model',LITELLM_REASONING_EFFORT:'none'})
+ await classifyAndDraft({username:'limpeza',name:'Empresa',bio:'Empresa de limpeza'})
+ expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body)).reasoning_effort).toBeUndefined()
+})

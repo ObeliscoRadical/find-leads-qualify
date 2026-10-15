@@ -32,6 +32,7 @@ const envSchema = z.object({
   LITELLM_API_KEY: z.string().optional(),
   LITELLM_BASE_URL: z.string().url().default('https://obelisco-litellm.onrender.com'),
   LITELLM_MODEL: z.string().default('obelisco-fast'),
+  LITELLM_REASONING_EFFORT: z.enum(['none','low','medium','high']).optional(),
 
   // Email
   RESEND_API_KEY: z.string().optional(),
