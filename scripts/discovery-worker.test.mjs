@@ -148,3 +148,12 @@ test('API timeout override accommodates long preparation and still aborts',async
   assert.deepEqual(await requestApi('https://example.test','secret','GET',undefined,{fetchImpl,timeoutMs:80}),{prepared:true})
   await assert.rejects(requestApi('https://example.test','secret','GET',undefined,{fetchImpl,timeoutMs:5}),{name:'TimeoutError'})
 })
+
+test('daily outreach authorization expires without stopping discovery',async()=>{
+ const {outreachAuthorized}=await import('./discovery-worker.mjs')
+ const settings={automaticOutreachEnabled:true,outreachAuthorizedUntil:'2026-10-15T19:00:00Z'}
+ assert.equal(outreachAuthorized(settings,Date.parse('2026-10-15T18:59:59Z')),true)
+ assert.equal(outreachAuthorized(settings,Date.parse('2026-10-15T19:00:00Z')),false)
+ assert.equal(outreachAuthorized({...settings,outreachAuthorizedUntil:'invalid'}),false)
+ assert.equal(outreachAuthorized({...settings,automaticOutreachEnabled:false},0),false)
+})

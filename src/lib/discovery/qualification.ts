@@ -13,6 +13,7 @@ export function assessDiscoveryProfile(bio: string, keywords: string, location: 
         && new RegExp(`^\\s*${escaped}(?:\\s+(?:e|/|&)|\\s*,|\\s*$)`).test(part.trim().split('\n')[0]));
     const locationConfirmed = Boolean(region && (
         geographicServiceClause ||
+        new RegExp(`(?:^|\\n)\\s*📍\\s*${escaped}(?=\\s*(?:$|\\n|[|,·/]|\\be\\b|\\barredores\\b|\\bmetropolitana\\b|\\bportugal\\b))`).test(normalized) ||
         new RegExp(`(?:em|localidade|localizacao|sede|morada|endereco)\\s*(?::|em)?\\s*${escaped}(?:\\b|$)`).test(normalized)
         || new RegExp(`(?:rua|avenida|av\\.|praca|travessa|codigo postal|\\d{4}-\\d{3})[^\\n]{0,100}\\b${escaped}\\b`).test(normalized)
         || new RegExp(`\\b${escaped}\\s*[,|·/-]\\s*portugal\\b|\\bportugal\\s*[,|·/-]\\s*${escaped}\\b`).test(normalized)

@@ -118,6 +118,9 @@ export async function persistRenewedToken(configPath, token) {
     await fs.rename(temp, configPath)
   } finally { await fs.rm(temp, {force:true}) }
 }
+export function outreachAuthorized(settings, now = Date.now()) {
+  return settings.automaticOutreachEnabled === true && (!settings.outreachAuthorizedUntil || now < Date.parse(settings.outreachAuthorizedUntil))
+}
 export function terminalApiError(error) { return [401, 403].includes(error?.status) }
 async function config() {
   let saved = {}
@@ -219,7 +222,7 @@ async function main() {
         await inspectInbox(page, monitoredLeads)
       }
       if (!job) {
-        if (settings.automaticOutreachEnabled === true && !stopping) {
+        if (outreachAuthorized(settings) && !stopping) {
           const outreachEndpoint = new URL('/api/outreach/worker', settings.apiUrl)
           const {job: outbound,lastError:outreachNotice} = await requestApi(outreachEndpoint, settings.token, 'GET', undefined, {timeoutMs:100000})
           if (outreachNotice && outreachNotice !== lastOutreachNotice) console.log(`Primeiro contacto em espera: ${outreachNotice}`)

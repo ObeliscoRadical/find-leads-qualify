@@ -5,10 +5,12 @@ describe('conservative prospect evidence', () => {
         expect(assessDiscoveryProfile('Lisboa da Costa Advogados', 'escritórios', 'Lisboa').locationEvidence).toBe('unverified');
     });
     it('recognizes an explicit region or address without inferring from handle', () => {
-        for (const bio of ['Escritório em Lisboa', 'Localidade: Lisboa', 'Rua Augusta 25, Lisboa', 'Lisboa, Portugal', 'Administração de condomínios · Lisboa e Loures\nClareza nas contas.', 'Gestão de condomínios | Lisboa']) {
+        for (const bio of ['Escritório em Lisboa', 'Localidade: Lisboa', 'Rua Augusta 25, Lisboa', 'Lisboa, Portugal', 'Administração de condomínios · Lisboa e Loures\nClareza nas contas.', 'Gestão de condomínios | Lisboa', 'Limpeza profissional\n📍 Lisboa e arredores | Peça informações', '📍 Lisboa metropolitana']) {
             expect(assessDiscoveryProfile(bio, 'escritórios', 'Lisboa').locationEvidence).toBe('confirmed');
         }
         expect(assessDiscoveryProfile('Advogados | Lisboa da Costa', 'escritórios', 'Lisboa').locationEvidence).toBe('unverified');
+        expect(assessDiscoveryProfile('📍 Lisboa da Costa', 'escritórios', 'Lisboa').locationEvidence).toBe('unverified');
+        expect(assessDiscoveryProfile('📍 Coimbra', 'escritórios', 'Lisboa').locationEvidence).toBe('unverified');
         expect(assessDiscoveryProfile('Escritório em Coimbra', 'escritórios', 'Lisboa').locationEvidence).toBe('unverified');
     });
     it('flags cleaning as review and explicit providers without claiming they are buyers', () => {
