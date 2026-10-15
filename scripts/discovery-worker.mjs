@@ -214,12 +214,16 @@ async function main() {
           } catch { console.warn('Credencial renovada nesta sessão, mas não foi possível preservar no arquivo protegido. Corrija a configuração antes de reiniciar.') }
         } else console.warn('Credencial renovada nesta sessão; configure DISCOVERY_CONFIG privado para preservar a renovação após reiniciar.')
       }
-      if (process.argv.includes('--inspect-inbox') && !job && monitoredLeads.length && Date.now() - lastInboxCheck >= 300000) {
+      if (settings.inboxMonitoringEnabled !== false && !job && monitoredLeads.length && Date.now() - lastInboxCheck >= 300000) {
         lastInboxCheck = Date.now()
         await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 })
         await verifyAccount()
         const { inspectInbox } = await import('./discovery-inbox.mjs')
-        await inspectInbox(page, monitoredLeads)
+        await inspectInbox(page, monitoredLeads, {
+          expectedSender: settings.expectedInstagramUsername,
+          ingest: message => requestApi(new URL('/api/discovery/replies', settings.apiUrl), settings.token, 'POST', message),
+          prepareDraft: leadId => requestApi(new URL('/api/discovery/replies/draft', settings.apiUrl), settings.token, 'POST', {leadId}, {timeoutMs:100000}),
+        })
       }
       if (!job) {
         if (outreachAuthorized(settings) && !stopping) {

@@ -10,6 +10,8 @@ const PUBLIC_PATHS = [
   '/api/health',
   '/manifest.webmanifest',
   '/api/discovery/worker',
+  '/api/discovery/replies',
+  '/api/discovery/replies/draft',
   '/api/outreach/worker',
   '/api/auth/login',
   '/api/auth/register',

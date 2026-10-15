@@ -3,7 +3,7 @@ const mock = vi.hoisted(() => ({ requireWorker: vi.fn(), recordInstagramReply: v
 vi.mock('@/lib/discovery/auth', () => mock)
 vi.mock('@/lib/leads/contact-store', () => mock)
 import { POST } from './route'
-const data = { username: 'Empresa.pt', content: 'Olá, pode enviar proposta?', externalId: 'thread123-msg456', threadUrl: 'https://www.instagram.com/direct/t/123/' }
+const data = { receivedAt:new Date().toISOString(), username: 'Empresa.pt', content: 'Olá, pode enviar proposta?', externalId: 'thread123-msg456', threadUrl: 'https://www.instagram.com/direct/t/123/' }
 const request = (value = data) => new Request('https://app.test/api/discovery/replies', { method: 'POST', body: JSON.stringify(value) })
 beforeEach(() => { vi.clearAllMocks(); mock.requireWorker.mockResolvedValue({ organizationId: 'org' }); mock.recordInstagramReply.mockResolvedValue({ imported: true }) })
 it('requires a paired worker before reading replies', async () => {

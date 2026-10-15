@@ -28,14 +28,19 @@ it('checks restrictions again inside the locked transaction', async () => {
 it('imports real replies once, updates contacted state and respects restrictions', async () => {
   const reply = { username: 'empresa', content: 'Real answer', externalId: 'message-external-id' }
   mock.lead.leadStatus = 'contacted'
-  expect(await recordInstagramReply('org', reply)).toEqual({ imported: true })
+  expect(await recordInstagramReply('org', reply)).toMatchObject({ imported: true })
   expect(mock.values).toHaveBeenCalledWith(expect.objectContaining({ content: reply.content, instagramMessageId: reply.externalId, isFromLead: true }))
   expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({ leadStatus: 'replied' }))
   mock.set.mockClear(); mock.duplicate = true
-  expect(await recordInstagramReply('org', reply)).toEqual({ imported: false })
+  expect(await recordInstagramReply('org', reply)).toMatchObject({ imported: false })
   expect(mock.set).not.toHaveBeenCalled()
   mock.lead.leadStatus = 'opted_out'
   expect(await recordInstagramReply('org', reply)).toBeNull()
   mock.lead.leadStatus = 'new'
   expect(await recordInstagramReply('org', reply)).toBeNull()
+})
+
+it('applies an incoming manual optout in the same transaction',async () => {
+  await recordContactMessage({...data,isFromLead:true,content:'Não me contactem mais'})
+  expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({leadStatus:'opted_out',noContact:true}))
 })

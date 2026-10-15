@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '@/db';
 import { jobs, leads, messages, metaConnections } from '@/db/schema';
 import { decrypt } from '@/lib/encryption';
+import { requestsOptOut } from '@/lib/replies/draft';
 import { captureGraph } from './lead-capture';
 export const messagingScopes = ['instagram_manage_messages', 'pages_manage_metadata'];
 export function hasMessagingScopes(scopes: string | null) {
@@ -18,7 +19,7 @@ export function incomingInstagramEvent(entryId: string, input: unknown) {
     if (!parsed.success || parsed.data.message.is_echo || parsed.data.recipient.id !== entryId || parsed.data.sender.id === entryId) return null;
     return parsed.data;
 }
-// Receive-only: never sends, queues responses, or changes contact restrictions.
+// Receive-only: records inbound and honours explicit opt-outs; never sends.
 export async function ingestInstagramEvent(entryId: string, input: unknown) {
     const event = incomingInstagramEvent(entryId, input);
     if (!event) return;
@@ -38,11 +39,13 @@ export async function ingestInstagramEvent(entryId: string, input: unknown) {
             if (!pending || pending.status === 'completed') return;
             let [lead] = await tx.select().from(leads).where(and(eq(leads.organizationId,connection.organizationId),eq(leads.instagramId,event.sender.id))).for('update');
             if (!lead && username) {
-                [lead] = await tx.select().from(leads).where(and(eq(leads.organizationId,connection.organizationId),sql`lower(${leads.instagramUsername})=${username}`,sql`(${leads.instagramId} IS NULL OR ${leads.instagramId}=${event.sender.id})`)).for('update');
+                const candidates = await tx.select().from(leads).where(and(eq(leads.organizationId,connection.organizationId),sql`lower(${leads.instagramUsername})=${username}`,sql`(${leads.instagramId} IS NULL OR ${leads.instagramId}=${event.sender.id})`)).for('update');
+                if (candidates.length !== 1) return;
+                [lead] = candidates;
             }
             if (!lead || !event.message.text) return;
             const [message] = await tx.insert(messages).values({id:`msg_${crypto.randomUUID().replace(/-/g,'')}`,organizationId:connection.organizationId,leadId:lead.id,role:'user',content:event.message.text,sentVia:'api',isFromLead:true,instagramMessageId:event.message.mid,createdAt:new Date(event.timestamp)}).onConflictDoNothing().returning({id:messages.id});
-            if (message) await tx.update(leads).set({instagramId:event.sender.id,leadStatus:['contacted','replied'].includes(lead.leadStatus) ? 'replied' : lead.leadStatus,lastInteractionAt:new Date(event.timestamp),updatedAt:new Date()}).where(and(eq(leads.id,lead.id),eq(leads.organizationId,connection.organizationId)));
+            if (message) await tx.update(leads).set({instagramId:event.sender.id,leadStatus:requestsOptOut(event.message.text) ? 'opted_out' : ['contacted','replied'].includes(lead.leadStatus) ? 'replied' : lead.leadStatus,...(requestsOptOut(event.message.text) ? {noContact:true,noContactReason:'Pedido de não contacto recebido no Instagram'} : {}),lastInteractionAt:new Date(event.timestamp),updatedAt:new Date()}).where(and(eq(leads.id,lead.id),eq(leads.organizationId,connection.organizationId)));
             await tx.update(jobs).set({status:'completed',leadId:lead.id,finishedAt:new Date()}).where(eq(jobs.id,id));
         });
     }

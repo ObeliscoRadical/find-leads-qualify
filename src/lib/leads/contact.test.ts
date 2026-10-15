@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { instagramContactUrl, leadAssessment, mergeMessageHistory, messageOriginLabel } from './contact'
+import { instagramContactUrl, leadAssessment, mergeMessageHistory, messageOriginLabel, replyDraftIdentity } from './contact'
 it('uses a stored Instagram profile without guessing a Direct recipient', () => {
   expect(instagramContactUrl('https://www.instagram.com/empresa.pt/', null)).toBe('https://www.instagram.com/empresa.pt/')
   expect(instagramContactUrl(null, 'empresa.pt')).toBe('https://www.instagram.com/empresa.pt/')
@@ -29,4 +29,14 @@ it('distinguishes automatic confirmations from manual records and incoming repli
  expect(messageOriginLabel({id:'manual',isFromLead:false,sentVia:'manual'})).toBe('Envio manual confirmado')
  expect(messageOriginLabel({id:'incoming',isFromLead:true,sentVia:'manual'})).toBe('Resposta do lead')
  expect(messageOriginLabel({id:'unknown',isFromLead:false})).toBe('Envio confirmado')
+})
+
+it('preserves draft editing identity only for identical polling results', () => {
+  const draft = { id: 'draft-a', inboundMessageId: 'incoming-a', content: 'Resposta original' }
+  expect(replyDraftIdentity({ ...draft })).toBe(replyDraftIdentity(draft))
+  for (const changed of [{ ...draft, id: 'draft-b' }, { ...draft, inboundMessageId: 'incoming-b' }, { ...draft, content: 'Resposta revista' }]) {
+    expect(replyDraftIdentity(changed)).not.toBe(replyDraftIdentity(draft))
+  }
+  expect(replyDraftIdentity(null)).not.toBe(replyDraftIdentity(draft))
+  expect(replyDraftIdentity(null)).toBeNull()
 })

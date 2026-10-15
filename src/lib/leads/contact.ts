@@ -30,3 +30,9 @@ export function messageOriginLabel(message: {id:string;isFromLead:boolean;sentVi
   if (message.sentVia === 'instagram_browser_ai' || message.id.startsWith('msg_outreach_')) return 'Envio automático confirmado'
   return message.sentVia === 'manual' ? 'Envio manual confirmado' : 'Envio confirmado'
 }
+
+// Includes inbound context and generated content: a stable database job ID alone
+// does not make an edited/confirmed draft valid after the conversation changes.
+export function replyDraftIdentity(draft: { id: string; inboundMessageId: string; content: string } | null) {
+  return draft ? JSON.stringify([draft.id, draft.inboundMessageId, draft.content]) : null
+}

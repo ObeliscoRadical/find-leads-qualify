@@ -10,6 +10,7 @@ const payload = z.object({
     return url.protocol === 'https:' && ['instagram.com', 'www.instagram.com'].includes(url.hostname) && /^\/direct\/t\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)
   }, 'Conversa Instagram inválida.'),
   content: z.string().trim().min(1).max(10000),
+  receivedAt: z.string().datetime({offset:true}).refine(value => new Date(value).getTime() <= Date.now() + 60000, 'Data futura inválida.'),
   externalId: z.string().trim().min(1).max(255),
 })
 export async function POST(request: Request) {
