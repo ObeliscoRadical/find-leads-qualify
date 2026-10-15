@@ -752,7 +752,7 @@ export async function getLeadMessages(organizationId: string, leadId: string) {
     .select()
     .from(messages)
     .where(and(eq(messages.organizationId, organizationId), eq(messages.leadId, leadId)))
-    .orderBy(messages.createdAt)
+    .orderBy(messages.createdAt, messages.id)
 }
 
 export async function createMessage(data: {

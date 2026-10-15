@@ -127,7 +127,7 @@ export default function ContactPanel({ lead, onUpdate }: { lead: Lead; onUpdate:
     <button type="button" className="secondary-button" disabled={!reply.trim() || saving} onClick={() => void record(true)}>Registar resposta real</button>
     {notice ? <p role="status">{notice}</p> : null}
     <h4>Resposta ao primeiro retorno do cliente</h4>
-    <p className="muted">A IA analisa a resposta recebida e prepara uma abordagem com curiosidade e convite para visitar https://obeliscoradical.pt. Preparar ou copiar não envia mensagem.</p>
+    <p className="muted">A IA analisa a resposta recebida e prepara uma abordagem com curiosidade e convite para visitar https://obeliscoradical.pt. O conector pode enviar uma primeira resposta automaticamente quando autorizado. Preparar ou copiar nesta tela não envia mensagem; o histórico só confirma envios verificados.</p>
     <button type="button" className="secondary-button" disabled={!!blocked || generating || saving || !history.some((message) => message.isFromLead)} onClick={() => void generateReply()}>{generating ? 'IA a analisar resposta...' : 'Preparar primeira resposta com IA'}</button>
     {replyDraft ? <div>
       <p><strong>Rascunho IA — não enviado</strong></p>
@@ -141,6 +141,6 @@ export default function ContactPanel({ lead, onUpdate }: { lead: Lead; onUpdate:
     </div> : null}
     {replyNotice ? <p role="status">{replyNotice}</p> : null}
     <h4>Histórico registado</h4>
-    {history.length ? history.map((message) => <article key={message.id}><strong>{messageOriginLabel(message)}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p><small>{new Date(message.createdAt).toLocaleString('pt-PT')}</small></article>) : <p className="muted">Sem mensagens registadas.</p>}
+    {history.length ? history.map((message) => <article key={message.id}><strong>{messageOriginLabel(message)}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p><small>{message.sentVia === 'instagram_browser_observed' ? 'Hora de observação: ' : ''}{new Date(message.createdAt).toLocaleString('pt-PT')}</small></article>) : <p className="muted">Sem mensagens registadas.</p>}
   </section>
 }

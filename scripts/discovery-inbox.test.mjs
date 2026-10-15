@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {verifiedInboundMessages, inspectInbox, importReplyBatch, stopInboxInspection} from './discovery-inbox.mjs'
+import {verifiedInboundMessages, inspectInbox, importReplyBatch, stopInboxInspection, saveInboxDiagnostics, verifiedReplySequence} from './discovery-inbox.mjs'
 const options={username:'customer',expectedSender:'obeliscoradical',threadUrl:'https://www.instagram.com/direct/t/123/'}
 const inbound={author:'customer',content:'Obrigado, qual o preço?',datetime:'2026-10-15T20:12:03Z'}
 test('inbound signature survives list reordering and excludes our outgoing echoes',()=>{
@@ -73,4 +73,63 @@ test('webhook reply prepares from server history even without an importable DOM 
  assert.deepEqual(prepared,['webhook-lead'])
  await inspectInbox({},[{id:'untouched-lead',leadStatus:'contacted',instagramUsername:'customer',instagramProfileUrl:'https://www.instagram.com/wrong/'}],{expectedSender:'obeliscoradical',prepareDraft:async id=>prepared.push(id),report:()=>{}})
  assert.deepEqual(prepared,['webhook-lead'])
+})
+
+test('private diagnostics persist only scoped DOM and cropped image with restrictive modes',async()=>{
+ const fs=await import('node:fs/promises'),os=await import('node:os'),path=await import('node:path')
+ const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'inbox-diagnostic-'))
+ const directory=path.join(temporary,'private')
+ const article={content:'Private real reply',authorLabels:['Reply to customer\'s message'],times:[]}
+ const header={filter(){return this},count:async()=>1,getAttribute:async()=>'/customer/',boundingBox:async()=>({x:650,y:20,width:200,height:30})}
+ let clip
+ const page={url:()=>options.threadUrl,getByRole:()=>header,locator:()=>({evaluateAll:async()=>[article]}),viewportSize:()=>({width:1000,height:700}),screenshot:async value=>{clip=value.clip;return Buffer.from('cropped image')}}
+ try {
+  await saveInboxDiagnostics(page,{username:'customer',threadUrl:options.threadUrl,status:'no_verified_reply'},{directory})
+  assert.equal((await fs.stat(directory)).mode & 0o777,0o700)
+  for(const name of ['customer.json','customer.png']) assert.equal((await fs.stat(path.join(directory,name))).mode & 0o777,0o600)
+  const saved=JSON.parse(await fs.readFile(path.join(directory,'customer.json'),'utf8'))
+  assert.deepEqual(saved.articles,[article])
+  assert.deepEqual(clip,{x:650,y:0,width:350,height:700})
+  assert.deepEqual((await fs.readdir(directory)).sort(),['customer.json','customer.png'])
+  await assert.rejects(saveInboxDiagnostics({...page,url:()=> 'https://www.instagram.com/direct/t/456/'},{username:'customer',threadUrl:options.threadUrl},{directory}),/inválida/)
+ } finally {await fs.rm(temporary,{recursive:true,force:true})}
+})
+
+const sequenceOptions={...options,anchor:{id:'confirmed-anchor',content:'Primeiro contacto real',createdAt:'2026-10-15T08:00:00Z'},now:Date.parse('2026-10-15T10:00:00Z')}
+const sequenceRows=[{author:'obeliscoradical',content:'Primeiro contacto real'},{author:'customer',content:'Cmg'}]
+test('sequence fallback has stable anchored identity and never invents receivedAt',()=>{
+ const result=verifiedReplySequence(sequenceRows,sequenceRows,sequenceOptions)
+ assert.equal(result.messages.length,1)
+ assert.equal(result.messages[0].receivedAt,undefined)
+ assert.equal(result.messages[0].receivedAfter,new Date(sequenceOptions.anchor.createdAt).toISOString())
+ assert.equal(result.messages[0].timestampEstimated,true)
+ assert.equal(result.messages[0].anchorMessageId,'confirmed-anchor')
+ const replay=verifiedReplySequence(sequenceRows,sequenceRows,{...sequenceOptions,previous:result.state,now:sequenceOptions.now+1000})
+ assert.equal(replay.messages[0].externalId,result.messages[0].externalId)
+})
+test('sequence requires unique verified anchor and explicit authors after reopening',()=>{
+ for(const rows of [sequenceRows.slice(1),[sequenceRows[0],...sequenceRows],[sequenceRows[0],{content:'Cmg',author:null}]]) assert.equal(verifiedReplySequence(rows,rows,sequenceOptions).state,undefined)
+ assert.equal(verifiedReplySequence(sequenceRows,[sequenceRows[0]],sequenceOptions).state,undefined)
+ assert.equal(verifiedReplySequence(sequenceRows,sequenceRows,{...sequenceOptions,now:sequenceOptions.now+86400000}).state,undefined)
+})
+test('sequence distinguishes repeated text and rejects edits, deletions and truncation',()=>{
+ const initial=verifiedReplySequence(sequenceRows,sequenceRows,sequenceOptions)
+ const appended=[...sequenceRows,{author:'customer',content:'Cmg'}]
+ const result=verifiedReplySequence(appended,appended,{...sequenceOptions,previous:initial.state})
+ assert.equal(result.messages.length,2)
+ assert.notEqual(result.messages[0].externalId,result.messages[1].externalId)
+ for(const changed of [[sequenceRows[0],{author:'customer',content:'edited'}],[sequenceRows[0]],sequenceRows.slice(1)]) assert.equal(verifiedReplySequence(changed,changed,{...sequenceOptions,previous:initial.state}).state,undefined)
+})
+
+test('sequence fails closed when Diego has already answered after the contact anchor',()=>{
+ const answered=[...sequenceRows,{author:'obeliscoradical',content:'Resposta manual'}, {author:'customer',content:'Cmg'}]
+ const result=verifiedReplySequence(answered,answered,sequenceOptions)
+ assert.equal(result.state,undefined)
+ assert.equal(result.reason,'conversation_already_answered')
+ assert.deepEqual(result.messages,[])
+ assert.equal(verifiedReplySequence(sequenceRows,sequenceRows,sequenceOptions).messages[0].sequenceOrdinal,1)
+})
+test('manual-review result never prepares or sends a stored webhook reply',async()=>{
+ const result=await inspectInbox({},[{id:'lead',leadStatus:'replied',instagramUsername:'customer',instagramProfileUrl:'https://www.instagram.com/customer/'}],{prepareDraft:async()=>assert.fail('manual review cannot prepare'),report:()=>{}})
+ assert.equal(result[0].status,'manual_review_required')
 })

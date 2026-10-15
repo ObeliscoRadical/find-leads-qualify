@@ -221,8 +221,19 @@ async function main() {
         const { inspectInbox } = await import('./discovery-inbox.mjs')
         await inspectInbox(page, monitoredLeads, {
           expectedSender: settings.expectedInstagramUsername,
+          diagnosticsEnabled: settings.inboxDiagnosticsEnabled === true,
           ingest: message => requestApi(new URL('/api/discovery/replies', settings.apiUrl), settings.token, 'POST', message),
-          prepareDraft: leadId => requestApi(new URL('/api/discovery/replies/draft', settings.apiUrl), settings.token, 'POST', {leadId}, {timeoutMs:100000}),
+          prepareDraft: async leadId => {
+            const prepared = await requestApi(new URL('/api/discovery/replies/draft', settings.apiUrl), settings.token, 'POST', {leadId}, {timeoutMs:100000})
+            if (prepared.status === 'prepared' && settings.replyAutomaticEnabled === true) {
+              const {processPreparedReply} = await import('./reply-worker.mjs')
+              await processPreparedReply(page,leadId,{
+                enabled:settings.replyAutomaticEnabled === true,expectedSender:settings.expectedInstagramUsername,
+                request:(method,body)=>requestApi(new URL('/api/discovery/replies/send',settings.apiUrl),settings.token,method,body),
+              })
+            }
+            return prepared
+          },
         })
       }
       if (!job) {

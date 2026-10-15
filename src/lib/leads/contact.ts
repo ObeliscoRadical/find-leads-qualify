@@ -27,7 +27,7 @@ export function firstContactDraft(name: string) {
 
 export function messageOriginLabel(message: {id:string;isFromLead:boolean;sentVia?:string}) {
   if (message.isFromLead) return 'Resposta do lead'
-  if (message.sentVia === 'instagram_browser_ai' || message.id.startsWith('msg_outreach_')) return 'Envio automático confirmado'
+  if (message.sentVia === 'instagram_browser_ai' || message.sentVia === 'instagram_browser_reply_ai' || message.id.startsWith('msg_outreach_')) return 'Envio automático confirmado'
   return message.sentVia === 'manual' ? 'Envio manual confirmado' : 'Envio confirmado'
 }
 

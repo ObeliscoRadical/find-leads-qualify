@@ -5,7 +5,7 @@ vi.mock('@/db', () => ({ getDb: () => ({ transaction: async (run: (tx: unknown) 
   insert: () => ({ values: (value: unknown) => { mock.values(value); return { returning: async () => [{ id: 'message' }], onConflictDoNothing: () => ({ returning: async () => mock.duplicate ? [] : [{ id: 'message' }] }) } } }),
   update: () => ({ set: (value: unknown) => { mock.set(value); return { where: async () => [] } } }),
 }) }) }))
-import { recordContactMessage, recordInstagramReply } from './contact-store'
+import { recordContactMessage, recordInstagramReply, browserSequenceMessageId } from './contact-store'
 const data = { organizationId: 'org', leadId: 'lead', content: 'Real', isFromLead: false }
 beforeEach(() => { vi.clearAllMocks(); mock.duplicate = false; mock.lead = { leadStatus: 'new', noContact: false } })
 it('advances to contacted only for recorded outgoing messages', async () => {
@@ -26,7 +26,7 @@ it('checks restrictions again inside the locked transaction', async () => {
 })
 
 it('imports real replies once, updates contacted state and respects restrictions', async () => {
-  const reply = { username: 'empresa', content: 'Real answer', externalId: 'message-external-id' }
+  const reply = { username: 'empresa', content: 'Real answer', externalId: 'message-external-id', receivedAt:new Date().toISOString() }
   mock.lead.leadStatus = 'contacted'
   expect(await recordInstagramReply('org', reply)).toMatchObject({ imported: true })
   expect(mock.values).toHaveBeenCalledWith(expect.objectContaining({ content: reply.content, instagramMessageId: reply.externalId, isFromLead: true }))
@@ -43,4 +43,12 @@ it('imports real replies once, updates contacted state and respects restrictions
 it('applies an incoming manual optout in the same transaction',async () => {
   await recordContactMessage({...data,isFromLead:true,content:'Não me contactem mais'})
   expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({leadStatus:'opted_out',noContact:true}))
+})
+
+it('keeps replay identity stable and orders observed sequence without fabricated timestamps',() => {
+  const ids=[10,2,1].map(ordinal => browserSequenceMessageId('org','lead','anchor',ordinal)).sort()
+  expect(ids.map(id => id.slice(-6))).toEqual(['000001','000002','000010'])
+  expect(browserSequenceMessageId('org','lead','anchor',1)).toBe(ids[0])
+  expect(browserSequenceMessageId('org2','lead','anchor',1)).not.toBe(ids[0])
+  expect(() => browserSequenceMessageId('org','lead','anchor',0)).toThrow()
 })

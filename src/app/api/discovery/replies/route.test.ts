@@ -26,3 +26,12 @@ it('rejects unmonitored or opted out lead and acknowledges deduplication', async
   mock.recordInstagramReply.mockResolvedValue({ imported: false })
   expect(await (await POST(request())).json()).toEqual({ imported: false })
 })
+
+it('accepts anchored observation but rejects missing time or incomplete proof',async () => {
+  const {receivedAt,...base}=data
+  expect((await POST(request(base as typeof data))).status).toBe(422)
+  const observed={...base,externalId:'ig-sequence-v1:'+ 'a'.repeat(64),observedAt:new Date().toISOString(),receivedAfter:new Date(Date.now()-60000).toISOString(),anchorMessageId:'msg_outreach_anchor',timestampEstimated:true,sequenceOrdinal:1}
+  expect((await POST(request(observed as unknown as typeof data))).status).toBe(200)
+  expect(mock.recordInstagramReply).toHaveBeenLastCalledWith('org',expect.objectContaining({timestampEstimated:true,anchorMessageId:'msg_outreach_anchor'}))
+  expect((await POST(request({...observed,anchorMessageId:undefined} as unknown as typeof data))).status).toBe(422)
+})

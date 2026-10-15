@@ -36,6 +36,18 @@ export async function generateFirstReply(context: { name: string | null; bio: st
   const result = z.object({shouldReply:z.boolean(),message:z.string().trim().max(1500)}).strict().parse(JSON.parse(choice.message.content))
   return result.shouldReply ? validateReplyDraft(result.message) : null
 }
+// Observed DOM ordering proves only a lower bound on receipt. Never renew
+// the 24-hour window using the time we happened to import the message.
+export async function replyWindowStart(db: Pick<ReturnType<typeof getDb>, 'select'>, organizationId: string, message: {id:string;leadId:string;sentVia:string;createdAt:Date}) {
+  if (message.sentVia !== 'instagram_browser_observed') return message.createdAt
+  const [evidence] = await db.select().from(jobs).where(and(eq(jobs.id,`inbound_evidence_${message.id}`),eq(jobs.organizationId,organizationId),eq(jobs.leadId,message.leadId),eq(jobs.kind,'instagram_inbound_evidence')))
+  if (!evidence?.payload) return null
+  let proof
+  try { proof = z.object({anchorMessageId:z.string(),receivedAfter:z.string().datetime({offset:true}),observedAt:z.string().datetime({offset:true}),timestampEstimated:z.literal(true)}).parse(JSON.parse(evidence.payload)) } catch { return null }
+  const [anchor] = await db.select().from(messages).where(and(eq(messages.id,proof.anchorMessageId),eq(messages.organizationId,organizationId),eq(messages.leadId,message.leadId),eq(messages.isFromLead,false)))
+  if (!anchor || !(anchor.sentVia === 'instagram_browser_ai' || anchor.id.startsWith('msg_outreach_')) || anchor.createdAt.toISOString() !== proof.receivedAfter || new Date(proof.observedAt).getTime() !== message.createdAt.getTime() || message.createdAt < anchor.createdAt) return null
+  return anchor.createdAt
+}
 // A completed draft job is preparation only: it is deliberately never inserted
 // into outgoing message history and never counted as a confirmed delivery.
 export async function prepareFirstReply(organizationId: string, leadId: string) {
@@ -50,7 +62,8 @@ export async function prepareFirstReply(organizationId: string, leadId: string) 
       return {status:'blocked'}
     }
     const latest = inbound[inbound.length - 1]
-    if (Date.now() - latest.createdAt.getTime() > 24 * 60 * 60 * 1000 || latest.createdAt.getTime() > Date.now() + 60000) return {status:'expired'}
+    const windowStart = await replyWindowStart(tx,organizationId,latest)
+    if (!windowStart || Date.now() - windowStart.getTime() > 86400000 || windowStart.getTime() > Date.now()+60000 || latest.createdAt.getTime() > Date.now()+60000) return {status:'expired'}
     const contact = history.filter(message => !message.isFromLead && (message.sentVia === 'instagram_browser_ai' || message.id.startsWith('msg_outreach_'))).at(-1) || history.find(message => !message.isFromLead)
     if (!contact) return {status:'blocked'}
     const first = inbound.find(message => message.createdAt > contact.createdAt)
@@ -65,7 +78,7 @@ export async function prepareFirstReply(organizationId: string, leadId: string) 
     }
     const content = await generateFirstReply({name:lead.instagramDisplayName,bio:lead.instagramBio,conversation:history.slice(-12).map(message => ({role:message.isFromLead ? 'customer' : 'business',content:message.content.slice(0,3000)}))})
     if (!content) return {status:'blocked'}
-    const draft = {id,leadId,content,inboundMessageId:inbound[inbound.length-1].id,preparedAt:new Date().toISOString(),deliveryStatus:'not_sent'}
+    const draft = {windowStart:windowStart.toISOString(),id,leadId,content,inboundMessageId:inbound[inbound.length-1].id,preparedAt:new Date().toISOString(),deliveryStatus:'not_sent'}
     if (existing) await tx.update(jobs).set({payload:JSON.stringify(draft),finishedAt:new Date()}).where(and(eq(jobs.id,id),eq(jobs.organizationId,organizationId)))
     else await tx.insert(jobs).values({id,organizationId,leadId,kind:'instagram_reply_draft',status:'completed',payload:JSON.stringify(draft),finishedAt:new Date()})
     return {status:'prepared',draft}
@@ -77,10 +90,12 @@ export async function getFirstReplyDraft(organizationId: string, leadId: string)
   if (!lead || lead.noContact || lead.leadStatus !== 'replied') return null
   const history = await getDb().select().from(messages).where(and(eq(messages.leadId,leadId),eq(messages.organizationId,organizationId))).orderBy(asc(messages.createdAt),asc(messages.id))
   const latest = history[history.length-1]
-  if (!latest?.isFromLead || Date.now() - latest.createdAt.getTime() > 86400000 || latest.createdAt.getTime() > Date.now()+60000 || history.some(message => message.isFromLead && requestsOptOut(message.content))) return null
+  if (!latest?.isFromLead) return null
+  const windowStart = await replyWindowStart(getDb(),organizationId,latest)
+  if (!windowStart || Date.now() - windowStart.getTime() > 86400000 || latest.createdAt.getTime() > Date.now()+60000 || history.some(message => message.isFromLead && requestsOptOut(message.content))) return null
   const id = `reply_${createHash('sha256').update(`${organizationId}:${leadId}:first`).digest('hex')}`
   const [job] = await getDb().select().from(jobs).where(and(eq(jobs.id,id),eq(jobs.organizationId,organizationId),eq(jobs.kind,'instagram_reply_draft')))
   if (!job?.payload || job.status !== 'completed') return null
   const draft = JSON.parse(job.payload)
-  return draft.inboundMessageId === latest.id ? draft : null
+  return draft.deliveryStatus === 'not_sent' && draft.inboundMessageId === latest.id ? draft : null
 }
