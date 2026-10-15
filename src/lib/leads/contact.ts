@@ -24,3 +24,9 @@ export function mergeMessageHistory<T extends { id: string; createdAt: string }>
 export function firstContactDraft(name: string) {
   return `Olá, ${name}! Sou o Diego, da Obelisco Radical. Apoiamos condomínios, imobiliárias e escritórios com manutenção e reparações elétricas. Gostaria de saber quem acompanha esta área na vossa empresa e se faria sentido apresentar os nossos serviços. Obrigado!`
 }
+
+export function messageOriginLabel(message: {id:string;isFromLead:boolean;sentVia?:string}) {
+  if (message.isFromLead) return 'Resposta do lead'
+  if (message.sentVia === 'instagram_browser_ai' || message.id.startsWith('msg_outreach_')) return 'Envio automático confirmado'
+  return message.sentVia === 'manual' ? 'Envio manual confirmado' : 'Envio confirmado'
+}

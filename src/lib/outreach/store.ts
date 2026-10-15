@@ -158,7 +158,7 @@ export async function completeOutreach(org: string, input: z.infer<typeof comple
       await tx.update(jobs).set({status:'manual_review',finishedAt:new Date(),lastError:input.error || 'Envio não confirmado. Verifique o Instagram antes de qualquer contacto.',payload:JSON.stringify({...payload,outcome:input.outcome,threadUrl:input.threadUrl})}).where(eq(jobs.id,job.id))
       return {recorded:false,manualReview:true}
     }
-    await tx.insert(messages).values({id:`msg_outreach_${job.id}`,organizationId:org,leadId:lead.id,role:'assistant',content:String(payload.message),sentVia:'manual',isFromLead:false,instagramMessageId:input.externalId || null}).onConflictDoNothing()
+    await tx.insert(messages).values({id:`msg_outreach_${job.id}`,organizationId:org,leadId:lead.id,role:'assistant',content:String(payload.message),sentVia:'instagram_browser_ai',isFromLead:false,instagramMessageId:input.externalId || null}).onConflictDoNothing()
     await tx.update(leads).set({leadStatus:lead.leadStatus === 'new' ? 'contacted' : lead.leadStatus,lastInteractionAt:new Date(),updatedAt:new Date()}).where(eq(leads.id,lead.id))
     await tx.update(jobs).set({status:'completed',finishedAt:new Date(),lastError:null,payload:JSON.stringify({...payload,outcome:'sent',threadUrl:input.threadUrl})}).where(eq(jobs.id,job.id))
     return {recorded:true,duplicate:false}

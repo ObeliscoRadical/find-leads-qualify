@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { firstContactDraft, instagramContactUrl, leadAssessment, mergeMessageHistory } from '@/lib/leads/contact'
+import { firstContactDraft, instagramContactUrl, leadAssessment, mergeMessageHistory, messageOriginLabel } from '@/lib/leads/contact'
 
 type Lead = { id: string; contactName: string | null; instagramDisplayName: string | null; instagramUsername: string | null; instagramProfileUrl: string | null; noContact: boolean | null; noContactReason: string | null; leadStatus: string }
-type Message = { id: string; content: string; isFromLead: boolean; createdAt: string }
+type Message = { id: string; content: string; isFromLead: boolean; createdAt: string; sentVia?: string }
 export default function ContactPanel({ lead, onUpdate }: { lead: Lead; onUpdate: () => Promise<void> }) {
   const [draft, setDraft] = useState(() => firstContactDraft(lead.contactName || lead.instagramDisplayName || lead.instagramUsername || 'equipa'))
   const [reply, setReply] = useState('')
@@ -64,6 +64,6 @@ export default function ContactPanel({ lead, onUpdate }: { lead: Lead; onUpdate:
     <button type="button" className="secondary-button" disabled={!reply.trim() || saving} onClick={() => void record(true)}>Registar resposta real</button>
     {notice ? <p role="status">{notice}</p> : null}
     <h4>Histórico registado</h4>
-    {history.length ? history.map((message) => <article key={message.id}><strong>{message.isFromLead ? 'Resposta do lead' : 'Envio manual confirmado'}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p><small>{new Date(message.createdAt).toLocaleString('pt-PT')}</small></article>) : <p className="muted">Sem mensagens registadas.</p>}
+    {history.length ? history.map((message) => <article key={message.id}><strong>{messageOriginLabel(message)}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p><small>{new Date(message.createdAt).toLocaleString('pt-PT')}</small></article>) : <p className="muted">Sem mensagens registadas.</p>}
   </section>
 }

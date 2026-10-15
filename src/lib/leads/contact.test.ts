@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { instagramContactUrl, leadAssessment, mergeMessageHistory } from './contact'
+import { instagramContactUrl, leadAssessment, mergeMessageHistory, messageOriginLabel } from './contact'
 it('uses a stored Instagram profile without guessing a Direct recipient', () => {
   expect(instagramContactUrl('https://www.instagram.com/empresa.pt/', null)).toBe('https://www.instagram.com/empresa.pt/')
   expect(instagramContactUrl(null, 'empresa.pt')).toBe('https://www.instagram.com/empresa.pt/')
@@ -21,4 +21,12 @@ it('merges a late initial history response without losing new records or duplica
   const older = { id: 'old', createdAt: '2026-10-10T10:00:00Z' }
   const newer = { id: 'new', createdAt: '2026-10-11T10:00:00Z' }
   expect(mergeMessageHistory([newer], [older, newer])).toEqual([older, newer])
+})
+
+it('distinguishes automatic confirmations from manual records and incoming replies',()=>{
+ expect(messageOriginLabel({id:'msg_outreach_lead',isFromLead:false,sentVia:'manual'})).toBe('Envio automático confirmado')
+ expect(messageOriginLabel({id:'new',isFromLead:false,sentVia:'instagram_browser_ai'})).toBe('Envio automático confirmado')
+ expect(messageOriginLabel({id:'manual',isFromLead:false,sentVia:'manual'})).toBe('Envio manual confirmado')
+ expect(messageOriginLabel({id:'incoming',isFromLead:true,sentVia:'manual'})).toBe('Resposta do lead')
+ expect(messageOriginLabel({id:'unknown',isFromLead:false})).toBe('Envio confirmado')
 })
