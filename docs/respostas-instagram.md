@@ -10,4 +10,4 @@ O envio automático da primeira resposta usa uma reserva única, valida a conver
 
 Quando não há timestamp absoluto no DOM, usa uma sequência persistente ancorada no primeiro contacto confirmado e reaberta para verificação. A hora exibida é rotulada Observado em; a janela conservadora de 24 horas começa no contacto comprovado. Alterações, apagamentos, respostas próprias adicionais ou contexto diferente bloqueiam o automático.
 
-Resposta real localizada em 15/10: @gestao_mais_condominios escreveu Cmg. A validação de importação e envio após a publicação deve ser comprovada no histórico e na conversa. Não confundir respostas com novos primeiros contactos.
+Resposta real localizada em 15/10: @gestao_mais_condominios escreveu Cmg. Importação e resposta IA confirmadas às 22h19 de Lisboa: o texto recebido foi registado, a IA preparou uma resposta com site e convite para telefonema, e o envio persistiu após reabrir a conversa. Lead com estado Respondeu, histórico com Envio automático confirmado. Segunda reserva retornou job nulo: não reenvia. Balanço separado: cinco primeiros contactos e uma resposta automática.
