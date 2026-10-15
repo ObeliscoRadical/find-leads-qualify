@@ -104,7 +104,6 @@ export async function claimOutreach(org: string) {
   const providerReady = aiProviderReady()
   if (!config.enabled || !providerReady) return {job: null, config, providerReady, lastError: providerReady ? null : 'Chave de IA não configurada.'}
   const env = getEnv()
-  if (!operatingHours(new Date(), env.OPERATING_TIMEZONE, env.OPERATING_HOURS_START, env.OPERATING_HOURS_END)) return {job:null, config, providerReady, lastError:'Fora do horário de envio configurado.'}
   const probe = await acquireProviderProbe(org)
   if (!probe.admitted) return {job:null,config,providerReady,providerState:probe.state,lastError:probe.state.message}
   try { await ensureProviderAvailable() }
@@ -124,6 +123,7 @@ export async function claimOutreach(org: string) {
     const paused = await finishProviderProbe(org,probe.token,error.message)
     return {job:null,config,providerReady,providerState:paused,lastError:paused.message}
   }
+  if (!operatingHours(new Date(), env.OPERATING_TIMEZONE, env.OPERATING_HOURS_START, env.OPERATING_HOURS_END)) return {job:null, config, providerReady, lastError:'Fora do horário de envio configurado.'}
   const job = await getDb().transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
     const current = await getOutreachConfig(org)

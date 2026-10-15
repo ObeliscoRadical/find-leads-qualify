@@ -172,11 +172,24 @@ async function main() {
     connectedUsername = account.username
     console.log(`Instagram conectado: @${connectedUsername}`)
   }
+  const inspection = process.argv.find(value => value.startsWith('--inspect-outreach='))
+  if (inspection) {
+    await verifyAccount()
+    const profile = profileFromUrl(`https://www.instagram.com/${inspection.split('=')[1]}/`)
+    if (!profile || profile.username === connectedUsername) throw new Error('Perfil de inspeção inválido.')
+    const {chromeOutreachAdapter} = await import('./outreach-worker.mjs')
+    try {
+      const result = await chromeOutreachAdapter(page,{expectedSender:settings.expectedInstagramUsername}).openConversation(profile)
+      console.log(JSON.stringify({inspection:true,sender:connectedUsername,...result}))
+    } finally { await closeBrowser() }
+    return
+  }
   const endpoint = new URL('/api/discovery/worker', settings.apiUrl)
   async function api(method, body) {
     return requestApi(endpoint, settings.token, method, body)
   }
   let lastInboxCheck = 0
+  let lastOutreachNotice = ''
   while (!stopping) {
     try { await guard(page) } catch (error) { console.log(error.message); if (process.argv.includes('--once')) { process.exitCode = 1; break }; await delay(10000); continue }
     let claimed
@@ -208,7 +221,9 @@ async function main() {
       if (!job) {
         if (settings.automaticOutreachEnabled === true && !stopping) {
           const outreachEndpoint = new URL('/api/outreach/worker', settings.apiUrl)
-          const {job: outbound} = await requestApi(outreachEndpoint, settings.token, 'GET', undefined, {timeoutMs:100000})
+          const {job: outbound,lastError:outreachNotice} = await requestApi(outreachEndpoint, settings.token, 'GET', undefined, {timeoutMs:100000})
+          if (outreachNotice && outreachNotice !== lastOutreachNotice) console.log(`Primeiro contacto em espera: ${outreachNotice}`)
+          lastOutreachNotice = outreachNotice || ''
           if (outbound) {
             let outcome
             try {
@@ -216,14 +231,29 @@ async function main() {
               await page.goto('https://www.instagram.com/', {waitUntil:'domcontentloaded',timeout:45000})
               await verifyAccount()
               const {sendOutreach, chromeOutreachAdapter} = await import('./outreach-worker.mjs')
-              const result = await sendOutreach(chromeOutreachAdapter(page), {instagramUsername:outbound.username,instagramProfileUrl:outbound.profileUrl,content:outbound.message}, {authorize: async () => {
+              const result = await sendOutreach(chromeOutreachAdapter(page,{expectedSender:connectedUsername}), {instagramUsername:outbound.username,instagramProfileUrl:outbound.profileUrl,content:outbound.message}, {authorize: async () => {
                 const authorized = await requestApi(outreachEndpoint, settings.token, 'PATCH', {jobId:outbound.id,claimToken:outbound.claimToken})
                 return authorized.authorized === true
               }})
+              if (result.status === 'sent') {
+                try {
+                  const evidenceDir = path.resolve('.discovery/evidence')
+                  await fs.mkdir(evidenceDir,{recursive:true,mode:0o700})
+                  const anchor = page.getByRole('link',{name:new RegExp(`(?:Open the profile page of|Abrir a página de perfil de) ${outbound.username.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`)}).first()
+                  const box = await anchor.boundingBox()
+                  const size = page.viewportSize()
+                  const clip = box && size ? {x:Math.max(0,Math.floor(box.x-20)),y:0,width:size.width-Math.max(0,Math.floor(box.x-20)),height:size.height} : undefined
+                  if (!clip) throw new Error('Recorte da conversa indisponível.')
+                  const evidence = path.join(evidenceDir,`${outbound.id.replace(/[^a-zA-Z0-9_-]/g,'_')}.png`)
+                  await page.screenshot({path:evidence,...(clip?{clip}:{})})
+                  await fs.chmod(evidence,0o600)
+                  console.log(`Comprovativo do contacto @${outbound.username} guardado em .discovery/evidence.`)
+                } catch { console.warn('Mensagem confirmada; comprovativo visual não ficou disponível.') }
+              }
               outcome = {outcome:result.status === 'sent' ? 'sent' : result.status === 'manual_review' ? 'uncertain' : 'failed', ...(result.threadUrl ? {threadUrl:result.threadUrl} : {}), ...(result.error ? {error:result.error} : {})}
             } catch (error) { outcome = {outcome:'failed',error:String(error.message).slice(0,500)} }
             await requestApi(outreachEndpoint, settings.token, 'POST', {jobId:outbound.id,claimToken:outbound.claimToken,...outcome})
-            console.log(`Primeiro contato: ${outcome.outcome}; confira o histórico no aplicativo.`)
+            console.log(`Primeiro contato @${outbound.username}: ${outcome.outcome}; confira o histórico no aplicativo.`)
           }
         }
         if (process.argv.includes('--once')) break
