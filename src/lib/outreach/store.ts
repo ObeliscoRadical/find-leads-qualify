@@ -1,3 +1,4 @@
+import { professionalLeadType } from '@/lib/discovery/business-types'
 import { and, eq, desc, inArray, sql } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { jobs, leads, messages } from '@/db/schema'
@@ -68,6 +69,8 @@ async function prepareOne(org: string, probeToken: string) {
     for (let offset = 0; ; offset += 300) {
     const candidates = await tx.select().from(leads).where(and(eq(leads.organizationId, org), eq(leads.leadStatus, 'new'), eq(leads.sourceType, 'instagram_browser'))).orderBy(leads.createdAt,leads.id).limit(300).offset(offset)
     for (const lead of candidates) {
+      const professionalType = professionalLeadType(lead)
+      if (config.targetBusinessTypes?.length && (!professionalType || !config.targetBusinessTypes.includes(professionalType))) continue
       if (!eligibleLead(lead) || !verifiedServiceRegion(lead)) continue
       const id = `outreach_${lead.id}`
       const [existing] = await tx.select().from(jobs).where(eq(jobs.id, id))
@@ -88,11 +91,12 @@ async function prepareOne(org: string, probeToken: string) {
     await getDb().transaction(async (tx) => {
       const [lead] = await tx.select().from(leads).where(and(eq(leads.id, reserved.lead.id), eq(leads.organizationId, org))).for('update')
       if (!lead) return
+      const config = await getOutreachConfig(org)
       const fields = readObject(lead.sourceFields)
       await tx.update(leads).set({sourceFields: JSON.stringify({...fields, outreach: classification}), updatedAt: new Date(), ...(classification.qualified && classification.businessType === 'cleaning_services' && removableProviderBlock(lead) ? {noContact: false, noContactReason: null} : {})}).where(eq(leads.id, lead.id))
       const [job] = await tx.select().from(jobs).where(eq(jobs.id, reserved.id)).for('update')
       if (!job || readObject(job.payload).claimToken !== reserved.claimToken || job.status !== 'classifying') return
-      await tx.update(jobs).set({ status: classification.qualified && eligibleLead(lead) && (!lead.noContact || (classification.businessType === 'cleaning_services' && removableProviderBlock(lead))) && verifiedServiceRegion(lead) ? 'ready' : 'rejected', lastError: classification.qualified && !verifiedServiceRegion(lead) ? 'Região de serviço por confirmar na bio. Envio automático bloqueado para revisão.' : null, startedAt: null, payload: JSON.stringify({ ...readObject(job.payload), username: lead.instagramUsername, ...classification, claimToken:undefined }) }).where(eq(jobs.id, reserved.id))
+      await tx.update(jobs).set({ status: classification.qualified && (!config.targetBusinessTypes?.length || config.targetBusinessTypes.some(type => type === classification.businessType && type === professionalLeadType(lead))) && eligibleLead(lead) && (!lead.noContact || (classification.businessType === 'cleaning_services' && removableProviderBlock(lead))) && verifiedServiceRegion(lead) ? 'ready' : 'rejected', lastError: classification.qualified && !verifiedServiceRegion(lead) ? 'Região de serviço por confirmar na bio. Envio automático bloqueado para revisão.' : null, startedAt: null, payload: JSON.stringify({ ...readObject(job.payload), username: lead.instagramUsername, ...classification, claimToken:undefined }) }).where(eq(jobs.id, reserved.id))
     })
   } catch (error) {
     await getDb().update(jobs).set({ status: 'failed', finishedAt: new Date(), lastError: error instanceof Error ? error.message.slice(0,1500) : 'Falha na classificação IA.' }).where(and(eq(jobs.id, reserved.id), eq(jobs.status, 'classifying')))
@@ -136,10 +140,13 @@ export async function claimOutreach(org: string) {
     if (!effective.enabled || !operatingHours(new Date(),env.OPERATING_TIMEZONE,env.OPERATING_HOURS_START,env.OPERATING_HOURS_END)) return null
     const recent = await tx.select().from(jobs).where(and(eq(jobs.organizationId,org), eq(jobs.kind,'outreach'), inArray(jobs.status,['running','completed','manual_review']), sql`${jobs.startedAt} >= date_trunc('day', now() AT TIME ZONE ${env.OPERATING_TIMEZONE}) AT TIME ZONE ${env.OPERATING_TIMEZONE}`)).orderBy(desc(jobs.startedAt))
     if (recent.length >= effective.maxDaily || recent.some((row) => row.status === 'running') || (recent[0]?.startedAt && Date.now()-recent[0].startedAt.getTime() < Math.max(effective.minIntervalSeconds, env.MIN_SECONDS_BETWEEN_DMS || 90)*1000)) return null
-    const ready = await tx.select().from(jobs).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),eq(jobs.status,'ready'))).orderBy(jobs.createdAt).limit(10).for('update')
+    const ready = await tx.select().from(jobs).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),eq(jobs.status,'ready'),...(current.targetBusinessTypes?.length ? [inArray(sql`${jobs.payload}::jsonb->>'businessType'`,current.targetBusinessTypes)] : []))).orderBy(jobs.createdAt).limit(10).for('update')
     for (const candidate of ready) {
+      const targetPayload = readObject(candidate.payload)
+      if (current.targetBusinessTypes?.length && !current.targetBusinessTypes.some(type => type === targetPayload.businessType)) continue
       const [lead] = await tx.select().from(leads).where(and(eq(leads.id,candidate.leadId!),eq(leads.organizationId,org))).for('update')
       if (!lead || lead.noContact || !eligibleLead(lead) || !verifiedServiceRegion(lead)) { await tx.update(jobs).set({status:'rejected', lastError:'Lead bloqueado ou já contactado.'}).where(eq(jobs.id,candidate.id)); continue }
+      if (current.targetBusinessTypes?.length && !current.targetBusinessTypes.some(type => type === professionalLeadType(lead))) continue
       const payload = readObject(candidate.payload)
       try { validateOutreachDraft(String(payload.message || '')) } catch { await tx.update(jobs).set({status:'rejected',lastError:'Rascunho antigo não passou a validação de conteúdo.'}).where(eq(jobs.id,candidate.id)); continue }
       const claimToken = crypto.randomUUID()
@@ -181,7 +188,7 @@ export async function authorizeOutreach(org: string, jobId: string, claimToken: 
     const env = getEnv()
     const effective = effectiveOutreachConfig(config,new Date(),env.OPERATING_TIMEZONE)
     const [lead] = await tx.select().from(leads).where(and(eq(leads.id,job.leadId!),eq(leads.organizationId,org))).for('update')
-    if (!effective.enabled || !operatingHours(new Date(),env.OPERATING_TIMEZONE,env.OPERATING_HOURS_START,env.OPERATING_HOURS_END) || !lead || lead.noContact || !eligibleLead(lead) || !verifiedServiceRegion(lead)) {
+    if (!effective.enabled || !operatingHours(new Date(),env.OPERATING_TIMEZONE,env.OPERATING_HOURS_START,env.OPERATING_HOURS_END) || !lead || (config.targetBusinessTypes?.length && !config.targetBusinessTypes.some(type => type === readObject(job.payload).businessType && type === professionalLeadType(lead))) || lead.noContact || !eligibleLead(lead) || !verifiedServiceRegion(lead)) {
       await tx.update(jobs).set({status:'manual_review',finishedAt:new Date(),lastError:'Envio cancelado: configuração ou restrição do lead mudou.'}).where(eq(jobs.id,job.id))
       return false
     }

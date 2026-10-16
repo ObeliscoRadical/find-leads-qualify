@@ -35,3 +35,9 @@ it('uses permanent cap5 when no dated override exists and does not change anothe
  expect(await authorizeOutreach('other-org','job',token)).toBe(false)
  expect(mock.updates).not.toHaveBeenCalled()
 })
+
+it('cancels a previously ready legacy sector when the scope now targets professional construction',async()=>{
+ const running=job();mock.rows=[[running],[{payload:JSON.stringify({enabled:true,maxDaily:5,targetBusinessTypes:['construction'],dateOverride:{date:'2026-10-16',maxDaily:20,minIntervalSeconds:1800}})}],[lead]]
+ expect(await authorizeOutreach('org','job',token)).toBe(false)
+ expect(mock.updates).toHaveBeenCalledWith(expect.objectContaining({status:'manual_review'}))
+})

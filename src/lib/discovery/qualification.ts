@@ -15,10 +15,11 @@ export function assessDiscoveryProfile(bio: string, keywords: string, location: 
         // Reject surnames such as Lisboa da Costa even after a location marker.
         const end = '(?=\\s*(?:$|\\n|[|,·/!;.]|🇵🇹|\\be\\b|\\barredores\\b|\\bmetropolitana\\b|\\bportugal\\b))';
         const geographicServiceClause = normalized.split(/[·|]/).some((part, index, parts) =>
-            index > 0 && /administracao|gestao|condominio|escritorio|servico|imobiliaria|limpeza/.test(parts[index - 1])
+            index > 0 && /administracao|gestao|condominio|escritorio|servico|imobiliaria|limpeza|construcao|arquitet|arquitect|engenharia|engenheir|restaurante/.test(parts[index - 1])
             && new RegExp(`^\\s*${escaped}${end}`).test(part.trim().split('\n')[0]));
         const explicitBusinessLocation = new RegExp(`(?:^|\\n)[^\\n]{0,100}\\bempresa de limpezas?\\s+${escaped}${end}`).test(normalized);
-        return geographicServiceClause || explicitBusinessLocation ||
+        const professionalLocation = new RegExp(`\\b(?:arquitet[oa]|arquitect[oa]|engenheir[oa])(?:\\s+civil)?\\s*,\\s*${escaped}${end}`).test(normalized);
+        return geographicServiceClause || explicitBusinessLocation || professionalLocation ||
             new RegExp(`(?:^|\\n)\\s*(?:📍|🇵🇹)\\s*${escaped}${end}`).test(normalized) ||
             new RegExp(`\\b(?:em|na|no|localidade|localizacao|sede|morada|endereco)\\s*(?::|em)?\\s*${escaped}${end}`).test(normalized) ||
             new RegExp(`\\bno coracao de\\s+${escaped}${end}`).test(normalized) ||

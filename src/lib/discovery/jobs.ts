@@ -5,7 +5,7 @@ import { jobs, leads } from '@/db/schema';
 import { calculateICPScore } from '@/lib/leads/scoring';
 import { z } from 'zod';
 import { discoverySchema, resultSchema } from './validation';
-import { segmentMatches, OUTSIDE_SEGMENT_REASON } from './segment';
+import { segmentProfileMatches, OUTSIDE_SEGMENT_REASON } from './segment';
 async function recoverExhausted(organizationId: string) {
     await getDb().update(jobs).set({ status: 'failed', finishedAt: new Date(), lastError: 'O Chrome perdeu a conexão após três tentativas. Inicie uma nova busca.' }).where(and(eq(jobs.organizationId, organizationId), eq(jobs.kind, 'discovery'), eq(jobs.status, 'running'), sql `${jobs.startedAt} < now()-interval '15 minutes'`, sql `COALESCE(${jobs.attempts},0)>=COALESCE(${jobs.maxAttempts},3)`));
 }
@@ -57,7 +57,7 @@ export async function finishDiscovery(organizationId: string, input: z.infer<typ
         if (payload.claimToken !== input.claimToken)
             return null;
         const received = input.profiles.slice(0, payload.limit || 10);
-        const profiles = received.filter(profile => segmentMatches(`${profile.username} ${profile.displayName || ''} ${profile.bio || ''}`, payload.keywords || ''));
+        const profiles = received.filter(profile => segmentProfileMatches(profile, payload.keywords || ''));
         const rejected = received.length - profiles.length;
         let inserted = 0;
         for (const profile of profiles) {
@@ -133,7 +133,7 @@ export async function reviewDiscovery(organizationId: string, jobId: string) {
                 await tx.update(leads).set({noContact: false, noContactReason: null, updatedAt: new Date()})
                     .where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId), sql`${leads.leadStatus} <> 'opted_out'`, sql`${leads.noContactReason} LIKE ${QUALIFICATION_REVIEW_REASON + '%'}`));
             }
-            if (segmentMatches(`${lead.instagramUsername || ''} ${lead.instagramDisplayName || ''} ${lead.instagramBio || ''}`, payload.keywords || '')) {
+            if (segmentProfileMatches({username:lead.instagramUsername || '',displayName:lead.instagramDisplayName,bio:lead.instagramBio}, payload.keywords || '')) {
                 valid++
                 // Preserve user opt-outs and every unrelated contact restriction.
                 if (lead.leadStatus !== 'opted_out' && lead.noContactReason?.startsWith(OUTSIDE_SEGMENT_REASON)) {

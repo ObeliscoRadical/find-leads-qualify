@@ -1,3 +1,4 @@
+import { professionalBusinessType, requestedProfessionalTypes } from './business-segments.mjs'
 import fs from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -19,7 +20,11 @@ export function segmentMatches(text, keyword) {
   const terms = normalizeSearch(keyword).split(/[^a-z0-9]+/).filter(word => word.length >= 4 && !stopwords.has(word))
   if (!terms.length) return false
   const normalized = normalizeSearch(text)
-  return terms.some(term => normalized.includes(term.slice(0, Math.max(5, term.length - 3))))
+  const requested = requestedProfessionalTypes(keyword)
+  const identified = professionalBusinessType(text)
+  const professionalMatch = requested.length > 0 && identified !== null && requested.includes(identified)
+  const legacyTerms = requested.length ? terms.filter(term => /^(?:condomin|imobili|escritor|limpez)/.test(term)) : terms
+  return professionalMatch || legacyTerms.some(term => normalized.includes(term.slice(0, Math.max(5, term.length - 3))))
 }
 function cleanDisplayName(text, username) {
   return String(text || '').split(/\n/).map(line => line.trim()).filter(line => line && normalizeSearch(line) !== normalizeSearch(username) && !/seguido|followed|seguir|follow/i.test(line)).join(' ').slice(0, 160) || username
@@ -94,7 +99,8 @@ export async function discover(page, job) {
       if (/Sorry, this page isn't available|Esta página não está disponível|Esta conta é privada|This account is private/i.test(text)) continue
       // A rendered profile includes its username and a posts/followers header. No synthetic fallback.
       if (!profileText.toLowerCase().includes(candidate.username) || !/seguidores|followers/i.test(profileText)) continue
-      if (!segmentMatches(`${candidate.username} ${text}`, keyword)) continue
+      const segmentText = requestedProfessionalTypes(keyword).length ? text.split('\n').filter(line => line.trim().toLowerCase() !== candidate.username).join('\n') : `${candidate.username} ${text}`
+      if (!segmentMatches(segmentText, keyword)) continue
       profiles.set(candidate.username, { ...candidate, bio: text.slice(0, 1800), sourceUrl })
       await delay(2000)
     }

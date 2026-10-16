@@ -5,6 +5,7 @@ import { normalizeSearch } from '@/lib/discovery/segment'
 // The higher cap is a one-day authorization, never a change to the permanent cap.
 export const outreachConfigSchema = z.object({
   enabled: z.boolean().default(false), maxDaily: z.number().int().min(1).max(5).default(5),
+  targetBusinessTypes:z.array(z.enum(['construction','architecture','engineering','restaurant'])).min(1).max(4).refine(values => new Set(values).size === values.length, 'Tipos de empresa repetidos.').optional(),
   dateOverride: z.object({ date: z.literal('2026-10-16'), maxDaily: z.number().int().min(1).max(20), minIntervalSeconds: z.number().int().min(1800).max(39600) }).strict().nullable().optional(),
 })
 export function effectiveOutreachConfig(config: z.infer<typeof outreachConfigSchema>, now = new Date(), timezone = 'Europe/Lisbon') {

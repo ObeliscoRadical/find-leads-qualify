@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocked = vi.hoisted(() => ({getEnv:vi.fn()}))
 vi.mock('@/lib/env',()=>mocked)
-import { classifyAndDraft, aiProviderReady, validateOutreachDraft, ensureProviderAvailable, ProviderUnavailableError } from './ai'
+import { classifyAndDraft, aiProviderReady, validateOutreachDraft, ensureProviderAvailable, ProviderUnavailableError, classificationSchema, outreachBusinessTypes } from './ai'
 const classified = {businessType:'cleaning_services',qualified:true,reason:'A bio descreve uma empresa de limpeza.',message:'Olá! Sou Diego da Obelisco Radical. Prestamos apoio elétrico aos imóveis que a vossa equipa de limpeza atende. Faria sentido uma parceria?'}
 const completion = (value = classified) => Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(value)}}]})
 beforeEach(()=>{vi.restoreAllMocks();mocked.getEnv.mockReturnValue({LITELLM_API_KEY:'test-secret',LITELLM_BASE_URL:'https://gateway.example',LITELLM_MODEL:'obelisco-fast'})})
@@ -88,4 +88,41 @@ it('applies reasoning controls only when configured for the LiteLLM provider',as
  mocked.getEnv.mockReturnValue({OPENAI_API_KEY:'test',OPENAI_MODEL:'configured-model',LITELLM_REASONING_EFFORT:'none'})
  await classifyAndDraft({username:'limpeza',name:'Empresa',bio:'Empresa de limpeza'})
  expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body)).reasoning_effort).toBeUndefined()
+})
+
+it.each([
+ {businessType:'construction',bio:'Construtora Exemplo. Construção e remodelação de edifícios. Lisboa.',message:'Olá! Sou Diego da Obelisco Radical. Podemos apresentar apoio elétrico às vossas obras e instalações. Quem coordena esta especialidade na vossa equipa?'},
+ {businessType:'architecture',bio:'Gabinete de Arquitetura Exemplo. Projetos e acompanhamento de obras em Lisboa.',message:'Olá! Sou Diego da Obelisco Radical. Gostaria de apresentar apoio na execução elétrica das obras que acompanham. Faz sentido conversar com quem coordena essa área?'},
+ {businessType:'engineering',bio:'Engenheira civil. Gabinete de engenharia e acompanhamento de obra. Lisboa.',message:'Olá! Sou Diego da Obelisco Radical. Podemos apresentar apoio na execução e manutenção de instalações elétricas em obra. Quem acompanha esta área nos vossos trabalhos?'},
+ {businessType:'restaurant',bio:'Restaurante Exemplo. Cozinha portuguesa em Lisboa.',message:'Olá! Sou Diego da Obelisco Radical. Gostaria de apresentar os nossos serviços de manutenção elétrica para o vosso restaurante. Quem acompanha essa área no espaço?'},
+ {businessType:'restaurant',bio:'João Silva. Proprietário e gerente do Restaurante Exemplo, Lisboa.',message:'Olá! Sou Diego da Obelisco Radical. Podemos apresentar apoio à manutenção elétrica do Restaurante Exemplo. Faz sentido conversarmos sobre esta área?'},
+])('accepts explicit professional $businessType profiles with a complete adapted electrical message',async({businessType,bio,message})=>{
+ const value={businessType,qualified:true,reason:'Atividade profissional explícita na bio.',message}
+ vi.spyOn(globalThis,'fetch').mockResolvedValue(completion(value))
+ await expect(classifyAndDraft({username:'empresa',name:'Atividade Profissional',bio})).resolves.toMatchObject({businessType,qualified:true,message})
+ expect(classificationSchema.parse(value).businessType).toBe(businessType)
+})
+it('uses one complete business enum for strict provider JSON schema and local parsing',async()=>{
+ mocked.getEnv.mockReturnValue({OPENAI_API_KEY:'test',OPENAI_MODEL:'configured-model'})
+ const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(completion())
+ await classifyAndDraft({username:'empresa',name:'Empresa',bio:'Empresa de limpeza profissional'})
+ const request=JSON.parse(String(fetcher.mock.calls[0][1]?.body))
+ expect(request.response_format.json_schema.schema.properties.businessType.enum).toEqual([...outreachBusinessTypes])
+ for(const type of ['construction','architecture','engineering','restaurant','cleaning_services']) expect(outreachBusinessTypes).toContain(type)
+ expect(classificationSchema.safeParse({...classified,businessType:'student'}).success).toBe(false)
+ expect(request.messages[0].content).toContain('Prioridade comercial permanente')
+ expect(request.messages[0].content).toContain('o nome do restaurante e o cargo')
+ expect(request.messages[0].content).toContain('Nunca afirme certificação, responsabilidade técnica, assinatura de projetos')
+})
+it.each([
+ 'Eletricista e instalações elétricas. Serviços profissionais em Lisboa.',
+ 'Engenheiro eletrotécnico. Empresa de reparações e instalações elétricas.',
+ 'Estudante de arquitetura. Os meus desenhos e viagens.',
+ 'Estudante de engenharia civil. Perfil pessoal.',
+ 'Adoro restaurantes e comida. Blog de gastronomia em Lisboa.',
+ 'João Silva. Família, viagens e restaurantes favoritos.',
+])('keeps competitors and unverified personal identities rejected: %s',async(bio)=>{
+ vi.spyOn(globalThis,'fetch').mockResolvedValue(completion({...classified,businessType:'other',qualified:false,reason:'Sem cliente profissional verificável ou concorrente elétrico.',message:'Mensagem que não deve ser usada.'}))
+ const result=await classifyAndDraft({username:'perfil',name:'Perfil público',bio})
+ expect(result.qualified).toBe(false);expect(result.message).toBe('')
 })
