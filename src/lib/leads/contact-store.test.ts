@@ -1,13 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-const mock = vi.hoisted(() => ({ lead: { leadStatus: 'new', noContact: false }, duplicate: false, set: vi.fn(), values: vi.fn() }))
+const mock = vi.hoisted(() => ({ lead: { leadStatus: 'new', noContact: false }, anchor:null as null | {id:string;sentVia:string;createdAt:Date}, duplicate: false, set: vi.fn(), values: vi.fn() }))
 vi.mock('@/db', () => ({ getDb: () => ({ transaction: async (run: (tx: unknown) => Promise<unknown>) => run({
-  select: () => ({ from: () => ({ where: () => ({ for: async () => [mock.lead] }) }) }),
+  select: () => ({ from: () => ({ where: () => ({ for: async () => [mock.lead], then:(resolve:(value:unknown)=>unknown) => resolve(mock.anchor ? [mock.anchor] : []) }) }) }),
   insert: () => ({ values: (value: unknown) => { mock.values(value); return { returning: async () => [{ id: 'message' }], onConflictDoNothing: () => ({ returning: async () => mock.duplicate ? [] : [{ id: 'message' }] }) } } }),
   update: () => ({ set: (value: unknown) => { mock.set(value); return { where: async () => [] } } }),
 }) }) }))
 import { recordContactMessage, recordInstagramReply, browserSequenceMessageId } from './contact-store'
 const data = { organizationId: 'org', leadId: 'lead', content: 'Real', isFromLead: false }
-beforeEach(() => { vi.clearAllMocks(); mock.duplicate = false; mock.lead = { leadStatus: 'new', noContact: false } })
+beforeEach(() => { vi.clearAllMocks(); mock.duplicate = false; mock.anchor=null; mock.lead = { leadStatus: 'new', noContact: false } })
 it('advances to contacted only for recorded outgoing messages', async () => {
   await recordContactMessage(data)
   expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({ leadStatus: 'contacted' }))
@@ -51,4 +51,22 @@ it('keeps replay identity stable and orders observed sequence without fabricated
   expect(browserSequenceMessageId('org','lead','anchor',1)).toBe(ids[0])
   expect(browserSequenceMessageId('org2','lead','anchor',1)).not.toBe(ids[0])
   expect(() => browserSequenceMessageId('org','lead','anchor',0)).toThrow()
+})
+
+it('imports an old observed contact without renewing its conservative receipt bound',async()=>{
+ mock.lead.leadStatus='contacted'
+ mock.anchor={id:'msg_outreach_old',sentVia:'instagram_browser_ai',createdAt:new Date(Date.now()-48*3600000)}
+ const reply={username:'empresa',content:'Resposta real descoberta hoje',externalId:'ig-sequence-v1:'+ 'a'.repeat(64),timestampEstimated:true,anchorMessageId:mock.anchor.id,receivedAfter:mock.anchor.createdAt.toISOString(),observedAt:new Date().toISOString(),sequenceOrdinal:1}
+ expect(await recordInstagramReply('org',reply)).toMatchObject({imported:true})
+ expect(mock.values).toHaveBeenCalledWith(expect.objectContaining({sentVia:'instagram_browser_observed',content:reply.content,createdAt:new Date(reply.observedAt)}))
+ const proof=mock.values.mock.calls.map(call=>call[0] as {kind?:string;payload?:string}).find(value=>value.kind==='instagram_inbound_evidence')
+ expect(JSON.parse(proof!.payload!)).toMatchObject({receivedAfter:mock.anchor.createdAt.toISOString()})
+})
+it('escalates replay proof to human review without inserting another incoming message',async()=>{
+ mock.lead.leadStatus='replied';mock.duplicate=true
+ mock.anchor={id:'msg_outreach_old',sentVia:'instagram_browser_ai',createdAt:new Date(Date.now()-3600000)}
+ const result=await recordInstagramReply('org',{username:'empresa',content:'Resposta real',externalId:'ig-sequence-v1:'+ 'b'.repeat(64),timestampEstimated:true,anchorMessageId:mock.anchor.id,receivedAfter:mock.anchor.createdAt.toISOString(),observedAt:new Date().toISOString(),sequenceOrdinal:1,requiresHumanReview:true})
+ expect(result).toMatchObject({imported:false})
+ expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({payload:expect.anything()}))
+ expect(mock.set).not.toHaveBeenCalledWith(expect.objectContaining({leadStatus:'replied'}))
 })

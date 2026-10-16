@@ -1,14 +1,16 @@
 import { requireAuth } from '@/lib/api-auth'
 import { jsonError, parseJson } from '@/lib/api'
 import { getOutreachConfig, setOutreachConfig, listOutreach, getOutreachProviderState } from '@/lib/outreach/store'
+import { getEnv } from '@/lib/env'
 import { aiProviderReady } from '@/lib/outreach/ai'
-import { outreachConfigSchema } from '@/lib/outreach/state'
+import { effectiveOutreachConfig, outreachConfigSchema } from '@/lib/outreach/state'
 export const runtime = 'nodejs'
 export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if (!auth) return jsonError('Não autorizado.',401)
   if (auth.membership?.role !== 'admin') return jsonError('Apenas administradores.',403)
-  return Response.json({config:await getOutreachConfig(auth.session.organizationId),providerReady:aiProviderReady(),providerState:await getOutreachProviderState(auth.session.organizationId),jobs:await listOutreach(auth.session.organizationId)}, {headers:{'Cache-Control':'no-store'}})
+  const config = await getOutreachConfig(auth.session.organizationId)
+  return Response.json({config,effectiveConfig:effectiveOutreachConfig(config,new Date(),getEnv().OPERATING_TIMEZONE),providerReady:aiProviderReady(),providerState:await getOutreachProviderState(auth.session.organizationId),jobs:await listOutreach(auth.session.organizationId)}, {headers:{'Cache-Control':'no-store'}})
 }
 export async function PATCH(request: Request) {
   const auth = await requireAuth(request)
@@ -16,6 +18,6 @@ export async function PATCH(request: Request) {
   if (auth.membership?.role !== 'admin') return jsonError('Apenas administradores.',403)
   const parsed = await parseJson(request,outreachConfigSchema)
   if (parsed.error) return parsed.error
-  try { return Response.json({config:await setOutreachConfig(auth.session.organizationId,parsed.data)}) }
+  try { const config=await setOutreachConfig(auth.session.organizationId,parsed.data); return Response.json({config,effectiveConfig:effectiveOutreachConfig(config,new Date(),getEnv().OPERATING_TIMEZONE)}) }
   catch (error) { return jsonError(error instanceof Error ? error.message : 'Não foi possível configurar envio.',409) }
 }

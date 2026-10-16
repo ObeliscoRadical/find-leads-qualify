@@ -1,8 +1,24 @@
 import { z } from 'zod'
 import { instagramContactUrl } from '@/lib/leads/contact'
-import { assessDiscoveryProfile, QUALIFICATION_REVIEW_REASON } from '@/lib/discovery/qualification'
+import { assessDiscoveryProfile, QUALIFICATION_REVIEW_REASON, LISBON_SERVICE_REGIONS } from '@/lib/discovery/qualification'
 import { normalizeSearch } from '@/lib/discovery/segment'
-export const outreachConfigSchema = z.object({ enabled: z.boolean().default(false), maxDaily: z.number().int().min(1).max(5).default(5) })
+// The higher cap is a one-day authorization, never a change to the permanent cap.
+export const outreachConfigSchema = z.object({
+  enabled: z.boolean().default(false), maxDaily: z.number().int().min(1).max(5).default(5),
+  dateOverride: z.object({ date: z.literal('2026-10-16'), maxDaily: z.number().int().min(1).max(20), minIntervalSeconds: z.number().int().min(1800).max(39600) }).strict().nullable().optional(),
+})
+export function effectiveOutreachConfig(config: z.infer<typeof outreachConfigSchema>, now = new Date(), timezone = 'Europe/Lisbon') {
+  const base = {enabled: config.enabled, maxDaily: config.maxDaily, minIntervalSeconds: 90, overrideActive: false}
+  if (!config.dateOverride) return base
+  if (!Number.isFinite(now.getTime())) return {...base, enabled: false}
+  const parts = new Intl.DateTimeFormat('en-GB', {timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'}).formatToParts(now)
+  const part = (type: string) => parts.find(value => value.type === type)?.value || ''
+  const date = `${part('year')}-${part('month')}-${part('day')}`
+  const active = date === config.dateOverride.date && Number(part('hour')) >= 9 && Number(part('hour')) < 20
+  // An expired authorization stays off, including the following day, until an
+  // administrator explicitly supplies a new configuration.
+  return active ? {...base, maxDaily: config.dateOverride.maxDaily, minIntervalSeconds: config.dateOverride.minIntervalSeconds, overrideActive: true} : {...base, enabled: false}
+}
 export const completionSchema = z.object({
   jobId: z.string().min(1).max(200), claimToken: z.string().uuid(),
   outcome: z.enum(['sent', 'uncertain', 'failed']), attemptedSend: z.boolean().optional(),
@@ -31,7 +47,7 @@ export function operatingHours(date: Date, timezone: string, start: number, end:
 export function verifiedServiceRegion(lead: {sourceFields: string | null; instagramBio: string | null}) {
   const fields = readObject(lead.sourceFields)
   const location = typeof fields.location === 'string' ? fields.location : ''
-  const allowedRegions = ['lisboa','grande lisboa','oeiras','cascais','sintra','amadora','odivelas','loures','almada','seixal','barreiro','montijo','mafra','vila franca de xira']
+  const allowedRegions = LISBON_SERVICE_REGIONS
   if (!allowedRegions.includes(normalizeSearch(location).trim())) return false
   return assessDiscoveryProfile(lead.instagramBio || '', '', location).locationEvidence === 'confirmed'
 }

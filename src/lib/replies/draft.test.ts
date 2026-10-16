@@ -24,3 +24,12 @@ it('fails closed if observation proof has no matching owned contact anchor',asyn
   const db={select:() => ({from:() => ({where:async () => []})})} as unknown as Parameters<typeof replyWindowStart>[0]
   expect(await replyWindowStart(db,'org',message)).toBeNull()
 })
+
+it('rejects proof requiring human review even if observed recently',async()=>{
+ const message={id:'observed',leadId:'lead',sentVia:'instagram_browser_observed',createdAt:new Date()}
+ const proof={anchorMessageId:'anchor',receivedAfter:new Date().toISOString(),observedAt:message.createdAt.toISOString(),timestampEstimated:true,requiresHumanReview:true}
+ let reads=0
+ const db={select:()=>({from:()=>({where:async()=>{reads++;return [{payload:JSON.stringify(proof)}]}})})} as unknown as Parameters<typeof replyWindowStart>[0]
+ expect(await replyWindowStart(db,'org',message)).toBeNull()
+ expect(reads).toBe(1)
+})

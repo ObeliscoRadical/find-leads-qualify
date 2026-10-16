@@ -43,7 +43,8 @@ export async function replyWindowStart(db: Pick<ReturnType<typeof getDb>, 'selec
   const [evidence] = await db.select().from(jobs).where(and(eq(jobs.id,`inbound_evidence_${message.id}`),eq(jobs.organizationId,organizationId),eq(jobs.leadId,message.leadId),eq(jobs.kind,'instagram_inbound_evidence')))
   if (!evidence?.payload) return null
   let proof
-  try { proof = z.object({anchorMessageId:z.string(),receivedAfter:z.string().datetime({offset:true}),observedAt:z.string().datetime({offset:true}),timestampEstimated:z.literal(true)}).parse(JSON.parse(evidence.payload)) } catch { return null }
+  try { proof = z.object({anchorMessageId:z.string(),receivedAfter:z.string().datetime({offset:true}),observedAt:z.string().datetime({offset:true}),timestampEstimated:z.literal(true),requiresHumanReview:z.boolean().optional()}).parse(JSON.parse(evidence.payload)) } catch { return null }
+  if (proof.requiresHumanReview) return null
   const [anchor] = await db.select().from(messages).where(and(eq(messages.id,proof.anchorMessageId),eq(messages.organizationId,organizationId),eq(messages.leadId,message.leadId),eq(messages.isFromLead,false)))
   if (!anchor || !(anchor.sentVia === 'instagram_browser_ai' || anchor.id.startsWith('msg_outreach_')) || anchor.createdAt.toISOString() !== proof.receivedAfter || new Date(proof.observedAt).getTime() !== message.createdAt.getTime() || message.createdAt < anchor.createdAt) return null
   return anchor.createdAt

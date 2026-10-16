@@ -15,7 +15,7 @@ const identity = z.object({
 const date = z.string().datetime({offset:true}).refine(value => new Date(value).getTime() <= Date.now() + 60000, 'Data futura inválida.')
 const payload = z.union([
   identity.extend({receivedAt:date,timestampEstimated:z.literal(false).optional()}),
-  identity.extend({externalId:z.string().regex(/^ig-sequence-v1:[a-f0-9]{64}$/),observedAt:date,receivedAfter:date,anchorMessageId:z.string().min(1).max(255),timestampEstimated:z.literal(true),sequenceOrdinal:z.number().int().min(1).max(10000)}),
+  identity.extend({externalId:z.string().regex(/^ig-sequence-v1:[a-f0-9]{64}$/),observedAt:date,receivedAfter:date,anchorMessageId:z.string().min(1).max(255),timestampEstimated:z.literal(true),sequenceOrdinal:z.number().int().min(1).max(10000),requiresHumanReview:z.boolean().optional()}),
 ])
 export async function POST(request: Request) {
   const worker = await requireWorker(request)

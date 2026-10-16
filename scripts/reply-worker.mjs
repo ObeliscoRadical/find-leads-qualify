@@ -27,7 +27,7 @@ export function replyConversationSignature(rows,username,inboundContent,{externa
   if (last.author!==username || last.content.trim()!==inboundContent.trim()) throw Error('Último retorno do cliente mudou; resposta pausada para revisão.')
   if (rows.some(row=>row.author===username && /nao (?:me |nos )?(?:contact|contat|envi|mand)|remov[ae]|retir[ae].*(?:lista|contact)|pare de|stop|unsubscribe|sem interesse|nao (?:estou|estamos|tenho|temos) interessad/.test(row.content.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()))) throw Error('Pedido de não contacto observado no Direct.')
   const candidates = externalId?.startsWith('ig-sequence-v1:')
-    ? verifiedReplySequence(rows,rows,{username,threadUrl,expectedSender,anchor,previous,now}).messages
+    ? verifiedReplySequence(rows,rows,{username,threadUrl,expectedSender,anchor,previous,now,forSending:true}).messages
     : verifiedInboundMessages(rows,{username,threadUrl,expectedSender})
   const latest=candidates.at(-1)
   if (!externalId || !latest || latest.externalId!==externalId || latest.content!==last.content.trim() || (!externalId.startsWith('ig-sequence-v1:') && Date.parse(last.datetime)!==Date.parse(latest.receivedAt))) throw Error('Identidade do retorno atual difere da resposta preparada.')

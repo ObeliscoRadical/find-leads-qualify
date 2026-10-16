@@ -3,7 +3,7 @@ import { getDb } from '@/db'
 import { jobs, leads, messages } from '@/db/schema'
 import { getEnv } from '@/lib/env'
 import { aiProviderReady, classifyAndDraft, validateOutreachDraft, ensureProviderAvailable, ProviderUnavailableError } from './ai'
-import { completionSchema, outreachConfigSchema, readObject, removableProviderBlock, eligibleLead, operatingHours, verifiedServiceRegion, canClassifyDaily, canRetryClassification, providerPauseState, nextProviderPause, unsuccessfulOutreachStatus } from './state'
+import { completionSchema, outreachConfigSchema, effectiveOutreachConfig, readObject, removableProviderBlock, eligibleLead, operatingHours, verifiedServiceRegion, canClassifyDaily, canRetryClassification, providerPauseState, nextProviderPause, unsuccessfulOutreachStatus } from './state'
 import { instagramContactUrl } from '@/lib/leads/contact'
 import { z } from 'zod'
 const configId = (org: string) => `outreach_config_${org}`
@@ -61,7 +61,7 @@ async function prepareOne(org: string, probeToken: string) {
     const config = await getOutreachConfig(org)
     const env = getEnv()
     const reservedToday = await tx.select({id:jobs.id}).from(jobs).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),sql`COALESCE((${jobs.payload}::jsonb->>'lastClassificationAt')::timestamptz,${jobs.createdAt}) >= date_trunc('day', now() AT TIME ZONE ${env.OPERATING_TIMEZONE}) AT TIME ZONE ${env.OPERATING_TIMEZONE}`))
-    if (!config.enabled || !canClassifyDaily(reservedToday.length)) return null
+    if (!effectiveOutreachConfig(config,new Date(),env.OPERATING_TIMEZONE).enabled || !canClassifyDaily(reservedToday.length)) return null
     const [provider] = await tx.select().from(jobs).where(and(eq(jobs.id,providerStateId(org)),eq(jobs.organizationId,org)))
     const providerPayload = readObject(provider?.payload || null)
     if (providerPayload.probeToken !== probeToken || Date.parse(String(providerPayload.probeUntil || '')) <= Date.now()) return null
@@ -102,8 +102,9 @@ async function prepareOne(org: string, probeToken: string) {
 export async function claimOutreach(org: string) {
   const config = await getOutreachConfig(org)
   const providerReady = aiProviderReady()
-  if (!config.enabled || !providerReady) return {job: null, config, providerReady, lastError: providerReady ? null : 'Chave de IA não configurada.'}
   const env = getEnv()
+  const effectiveConfig = effectiveOutreachConfig(config,new Date(),env.OPERATING_TIMEZONE)
+  if (!effectiveConfig.enabled || !providerReady) return {job: null, config, providerReady, lastError: providerReady ? null : 'Chave de IA não configurada.'}
   const probe = await acquireProviderProbe(org)
   if (!probe.admitted) return {job:null,config,providerReady,providerState:probe.state,lastError:probe.state.message}
   try { await ensureProviderAvailable() }
@@ -131,9 +132,10 @@ export async function claimOutreach(org: string) {
   const job = await getDb().transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
     const current = await getOutreachConfig(org)
-    if (!current.enabled) return null
+    const effective = effectiveOutreachConfig(current,new Date(),env.OPERATING_TIMEZONE)
+    if (!effective.enabled || !operatingHours(new Date(),env.OPERATING_TIMEZONE,env.OPERATING_HOURS_START,env.OPERATING_HOURS_END)) return null
     const recent = await tx.select().from(jobs).where(and(eq(jobs.organizationId,org), eq(jobs.kind,'outreach'), inArray(jobs.status,['running','completed','manual_review']), sql`${jobs.startedAt} >= date_trunc('day', now() AT TIME ZONE ${env.OPERATING_TIMEZONE}) AT TIME ZONE ${env.OPERATING_TIMEZONE}`)).orderBy(desc(jobs.startedAt))
-    if (recent.length >= current.maxDaily || recent.some((row) => row.status === 'running') || (recent[0]?.startedAt && Date.now()-recent[0].startedAt.getTime() < Math.max(90, env.MIN_SECONDS_BETWEEN_DMS)*1000)) return null
+    if (recent.length >= effective.maxDaily || recent.some((row) => row.status === 'running') || (recent[0]?.startedAt && Date.now()-recent[0].startedAt.getTime() < Math.max(effective.minIntervalSeconds, env.MIN_SECONDS_BETWEEN_DMS || 90)*1000)) return null
     const ready = await tx.select().from(jobs).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),eq(jobs.status,'ready'))).orderBy(jobs.createdAt).limit(10).for('update')
     for (const candidate of ready) {
       const [lead] = await tx.select().from(leads).where(and(eq(leads.id,candidate.leadId!),eq(leads.organizationId,org))).for('update')
@@ -171,16 +173,21 @@ export async function completeOutreach(org: string, input: z.infer<typeof comple
 
 export async function authorizeOutreach(org: string, jobId: string, claimToken: string) {
   return getDb().transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${org + ':outreach'}))`)
     const [job] = await tx.select().from(jobs).where(and(eq(jobs.id,jobId),eq(jobs.organizationId,org),eq(jobs.kind,'outreach'))).for('update')
     if (!job || job.status !== 'running' || readObject(job.payload).claimToken !== claimToken || !job.startedAt || Date.now()-job.startedAt.getTime() > 5*60*1000) return false
     try { validateOutreachDraft(String(readObject(job.payload).message || '')) } catch { return false }
     const config = await getOutreachConfig(org)
     const env = getEnv()
+    const effective = effectiveOutreachConfig(config,new Date(),env.OPERATING_TIMEZONE)
     const [lead] = await tx.select().from(leads).where(and(eq(leads.id,job.leadId!),eq(leads.organizationId,org))).for('update')
-    if (!config.enabled || !operatingHours(new Date(),env.OPERATING_TIMEZONE,env.OPERATING_HOURS_START,env.OPERATING_HOURS_END) || !lead || lead.noContact || !eligibleLead(lead) || !verifiedServiceRegion(lead)) {
+    if (!effective.enabled || !operatingHours(new Date(),env.OPERATING_TIMEZONE,env.OPERATING_HOURS_START,env.OPERATING_HOURS_END) || !lead || lead.noContact || !eligibleLead(lead) || !verifiedServiceRegion(lead)) {
       await tx.update(jobs).set({status:'manual_review',finishedAt:new Date(),lastError:'Envio cancelado: configuração ou restrição do lead mudou.'}).where(eq(jobs.id,job.id))
       return false
     }
+    const recent = await tx.select().from(jobs).where(and(eq(jobs.organizationId,org),eq(jobs.kind,'outreach'),inArray(jobs.status,['running','completed','manual_review']),sql`${jobs.startedAt} >= date_trunc('day', now() AT TIME ZONE ${env.OPERATING_TIMEZONE}) AT TIME ZONE ${env.OPERATING_TIMEZONE}`)).orderBy(desc(jobs.startedAt))
+    const previous = recent.filter(row => row.id !== job.id)
+    if (recent.length > effective.maxDaily || previous.some(row => row.status === 'running') || (previous[0]?.startedAt && Date.now()-previous[0].startedAt.getTime() < Math.max(effective.minIntervalSeconds,env.MIN_SECONDS_BETWEEN_DMS || 90)*1000)) return false
     return true
   })
 }

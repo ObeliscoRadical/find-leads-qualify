@@ -110,7 +110,7 @@ test('sequence fallback has stable anchored identity and never invents receivedA
 test('sequence requires unique verified anchor and explicit authors after reopening',()=>{
  for(const rows of [sequenceRows.slice(1),[sequenceRows[0],...sequenceRows],[sequenceRows[0],{content:'Cmg',author:null}]]) assert.equal(verifiedReplySequence(rows,rows,sequenceOptions).state,undefined)
  assert.equal(verifiedReplySequence(sequenceRows,[sequenceRows[0]],sequenceOptions).state,undefined)
- assert.equal(verifiedReplySequence(sequenceRows,sequenceRows,{...sequenceOptions,now:sequenceOptions.now+86400000}).state,undefined)
+ assert.equal(verifiedReplySequence(sequenceRows,sequenceRows,{...sequenceOptions,forSending:true,now:sequenceOptions.now+86400000}).state,undefined)
 })
 test('sequence distinguishes repeated text and rejects edits, deletions and truncation',()=>{
  const initial=verifiedReplySequence(sequenceRows,sequenceRows,sequenceOptions)
@@ -123,7 +123,7 @@ test('sequence distinguishes repeated text and rejects edits, deletions and trun
 
 test('sequence fails closed when Diego has already answered after the contact anchor',()=>{
  const answered=[...sequenceRows,{author:'obeliscoradical',content:'Resposta manual'}, {author:'customer',content:'Cmg'}]
- const result=verifiedReplySequence(answered,answered,sequenceOptions)
+ const result=verifiedReplySequence(answered,answered,{...sequenceOptions,forSending:true})
  assert.equal(result.state,undefined)
  assert.equal(result.reason,'conversation_already_answered')
  assert.deepEqual(result.messages,[])
@@ -132,4 +132,21 @@ test('sequence fails closed when Diego has already answered after the contact an
 test('manual-review result never prepares or sends a stored webhook reply',async()=>{
  const result=await inspectInbox({},[{id:'lead',leadStatus:'replied',instagramUsername:'customer',instagramProfileUrl:'https://www.instagram.com/customer/'}],{prepareDraft:async()=>assert.fail('manual review cannot prepare'),report:()=>{}})
  assert.equal(result[0].status,'manual_review_required')
+})
+
+test('reading old contacts and returns after our answer never renews reply authorization',()=>{
+ const expired={...sequenceOptions,now:sequenceOptions.now+86400000}
+ const read=verifiedReplySequence(sequenceRows,sequenceRows,expired)
+ assert.equal(read.messages.length,1)
+ assert.equal(read.replyBlocked,true)
+ assert.equal(read.reason,'conservative_window_expired')
+ assert.equal(read.messages[0].receivedAfter,new Date(sequenceOptions.anchor.createdAt).toISOString())
+ assert.equal(read.messages[0].receivedAt,undefined)
+ assert.equal(verifiedReplySequence(sequenceRows,sequenceRows,{...expired,forSending:true}).messages.length,0)
+ const afterAnswer=[...sequenceRows,{author:'obeliscoradical',content:'Nossa resposta confirmada'},{author:'customer',content:'Outra dúvida'}]
+ const detected=verifiedReplySequence(afterAnswer,afterAnswer,{...sequenceOptions,previous:verifiedReplySequence(sequenceRows,sequenceRows,sequenceOptions).state})
+ assert.equal(detected.messages.length,2)
+ assert.equal(detected.replyBlocked,true)
+ assert.equal(detected.messages[1].requiresHumanReview,true)
+ assert.equal(verifiedReplySequence(afterAnswer,afterAnswer,{...sequenceOptions,forSending:true}).messages.length,0)
 })

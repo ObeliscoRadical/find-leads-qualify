@@ -52,7 +52,7 @@ export async function inspectLeadThread(page, lead, {expectedSender,sequenceStat
     const sequence=verifiedReplySequence(rows,reopenedRows,{username:expected,threadUrl,expectedSender,anchor:lead.contactAnchor,previous:await loadSequenceState(filename)})
     if (!sequence.state) return {username:expected,threadUrl,status:'manual_review_required',reason:sequence.reason,messages:[]}
     await persistSequenceState(filename,sequence.state)
-    return {username:expected,threadUrl,status:sequence.messages.length?'verified_reply':'no_verified_reply',messages:sequence.messages}
+    return {username:expected,threadUrl,status:sequence.messages.length?(sequence.replyBlocked?'verified_reply_readonly':'verified_reply'):'no_verified_reply',replyBlocked:sequence.replyBlocked,reason:sequence.reason,messages:sequence.messages}
   }
   const reopened = verifiedInboundMessages(reopenedRows,{username:expected,threadUrl,expectedSender})
   const messages = first.filter(message=>reopened.some(other=>other.externalId===message.externalId))
@@ -65,14 +65,14 @@ export async function inspectInbox(page, leads, {expectedSender,ingest,prepareDr
     try {
       const result = await inspectLeadThread(page,lead,{expectedSender,sequenceStateDir})
       results.push(result)
-      if (diagnosticsEnabled && result.threadUrl && ['manual_review_required','no_verified_reply'].includes(result.status)) {
+      if (diagnosticsEnabled && result.threadUrl) {
         try { await saveInboxDiagnostics(page,result,{directory:diagnosticsDir}); report(`Inbox @${result.username}: diagnóstico privado guardado.`) }
         catch { report(`Inbox @${result.username}: diagnóstico privado indisponível.`) }
       }
-      await importReplyBatch(result.messages || [],{ingest,prepareDraft})
+      await importReplyBatch(result.messages || [],{ingest,prepareDraft:result.status === 'verified_reply' && !result.replyBlocked ? prepareDraft : undefined})
       // A Meta webhook can already have persisted the customer's reply. DOM
       // timestamp availability must not gate preparation of that server history.
-      if (lead.leadStatus === 'replied' && lead.id && result.status === 'no_verified_reply' && !(result.messages || []).length && prepareDraft) await prepareDraft(lead.id)
+      if (lead.leadStatus === 'replied' && lead.id && !result.replyBlocked && result.status === 'no_verified_reply' && !(result.messages || []).length && prepareDraft) await prepareDraft(lead.id)
       report(`Inbox @${result.username}: ${result.status}`)
     } catch (error) {
       report(`Inbox @${lead.instagramUsername}: revisão necessária — ${error.message}`)
@@ -142,10 +142,10 @@ export async function saveInboxDiagnostics(page, result, {directory = '.discover
 // When Instagram omits times and message ids, identity comes from an immutable
 // observed sequence anchored to a server-confirmed outgoing message, not an
 // arbitrary viewport position. Any truncation/edit/deletion requires review.
-export function verifiedReplySequence(rows, reopenedRows, {username,threadUrl,expectedSender,anchor,previous,now = Date.now()}) {
+export function verifiedReplySequence(rows, reopenedRows, {username,threadUrl,expectedSender,anchor,previous,forSending = false,now = Date.now()}) {
   const thread = threadFromUrl(threadUrl)
   const anchorTime = Date.parse(anchor?.createdAt)
-  if (!thread || !anchor?.id || typeof anchor.content !== 'string' || !Number.isFinite(anchorTime) || anchorTime > now || now-anchorTime > 86400000 || !username || !expectedSender || username===expectedSender) return {reason:'invalid_or_expired_anchor',messages:[]}
+  if (!thread || !anchor?.id || typeof anchor.content !== 'string' || !Number.isFinite(anchorTime) || anchorTime > now || (forSending && now-anchorTime > 86400000) || !username || !expectedSender || username===expectedSender) return {reason:'invalid_or_expired_anchor',messages:[]}
   const canonical = list => {
     const matches = list.map((row,index)=>row.author===expectedSender && row.content?.trim()===anchor.content.trim()?index:-1).filter(index=>index>=0)
     if (matches.length !== 1) return null
@@ -156,10 +156,12 @@ export function verifiedReplySequence(rows, reopenedRows, {username,threadUrl,ex
   const prefix = canonical(rows), reopened = canonical(reopenedRows)
   if (!prefix || !reopened || JSON.stringify(prefix)!==JSON.stringify(reopened)) return {reason:'missing_ambiguous_or_changed_sequence',messages:[]}
   if (previous && (previous.threadUrl!==thread || previous.anchorId!==anchor.id || !Array.isArray(previous.prefix) || previous.prefix.length>prefix.length || previous.prefix.some((row,index)=>JSON.stringify(row)!==JSON.stringify(prefix[index])))) return {reason:'previous_sequence_edited_or_deleted',messages:[]}
-  if (prefix.slice(1).some(row=>row.author===expectedSender)) return {reason:'conversation_already_answered',messages:[]}
+  const answered=prefix.slice(1).some(row=>row.author===expectedSender)
+  if (forSending && answered) return {reason:'conversation_already_answered',messages:[]}
+  const expired=now-anchorTime>86400000
   const observedAt = new Date(now).toISOString()
-  const messages = prefix.flatMap((row,ordinal)=> row.author===username ? [{username,threadUrl:thread,content:row.content,externalId:`ig-sequence-v1:${createHash('sha256').update(JSON.stringify([thread,anchor.id,ordinal,row.author,row.content])).digest('hex')}`,observedAt,receivedAfter:new Date(anchorTime).toISOString(),timestampEstimated:true,anchorMessageId:anchor.id,sequenceOrdinal:ordinal}] : [])
-  return {state:{threadUrl:thread,anchorId:anchor.id,prefix},messages}
+  const messages = prefix.flatMap((row,ordinal)=> row.author===username ? [{username,threadUrl:thread,content:row.content,externalId:`ig-sequence-v1:${createHash('sha256').update(JSON.stringify([thread,anchor.id,ordinal,row.author,row.content])).digest('hex')}`,observedAt,receivedAfter:new Date(anchorTime).toISOString(),timestampEstimated:true,anchorMessageId:anchor.id,sequenceOrdinal:ordinal,requiresHumanReview:answered}] : [])
+  return {state:{threadUrl:thread,anchorId:anchor.id,prefix},messages,replyBlocked:answered || expired,reason:answered?'conversation_already_answered':expired?'conservative_window_expired':undefined}
 }
 async function sequenceStateFile(username,threadUrl,anchorId,directory) {
   const dir=path.resolve(directory)

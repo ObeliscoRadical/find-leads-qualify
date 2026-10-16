@@ -26,3 +26,10 @@ describe('conservative prospect evidence', () => {
         expect(assessment.requiresReview).toBe(true);
     });
 });
+
+it('accepts explicit municipality coverage in the approved Lisbon service area',() => {
+ for(const bio of ['Mediamos imóveis na Grande Lisboa','No coração de Lisboa 🇵🇹','🇵🇹 Lisboa\nLimpezas profissionais','Avenida Da Liberdade, Loja 32A, Odivelas','Rua Ribeiro de Carvalho N°41 B, Sintra, Portugal 2735-328','R. Fernando Palha 50 2, Lisbon, Portugal 1950-132','Limpezas | Lisboa e arredores','Empresa de Limpezas Lisboa','Jaquecosta clean excellence - Empresa de Limpezas Lisboa']) expect(assessDiscoveryProfile(bio,'limpezas','Lisboa').locationEvidence,bio).toBe('confirmed')
+})
+it('rejects surnames, generic Portugal and contradictory foreign service evidence',() => {
+ for(const bio of ['Advogados | Lisboa da Costa','Escritório em Lisboa da Costa','📍 Lisboa da Costa','Gislaine Lisboa / Limpezas','Empresa com cobertura nacional Portugal','Condomínios no Brasil. Rua Lisboa, São Paulo','🇻🇪 Caracas | Imobiliária Lisboa','Administração de condomínios em BH','Lisboa da Costa Advogados 🇧🇷','Limpezas, Lisboa metropolitana']) expect(assessDiscoveryProfile(bio,'limpezas','Lisboa').locationEvidence,bio).toBe('unverified')
+})

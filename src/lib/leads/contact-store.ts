@@ -31,7 +31,7 @@ export async function recordContactMessage(data: {
   })
 }
 
-export async function recordInstagramReply(organizationId: string, data: { username: string; content: string; externalId: string; receivedAt?: string; observedAt?: string; receivedAfter?: string; anchorMessageId?: string; timestampEstimated?: boolean; sequenceOrdinal?:number }) {
+export async function recordInstagramReply(organizationId: string, data: { username: string; content: string; externalId: string; receivedAt?: string; observedAt?: string; receivedAfter?: string; anchorMessageId?: string; timestampEstimated?: boolean; sequenceOrdinal?:number; requiresHumanReview?:boolean }) {
   return getDb().transaction(async (tx) => {
     const matches = await tx.select().from(leads).where(and(eq(leads.organizationId, organizationId), sql`lower(${leads.instagramUsername})=${data.username.toLowerCase()}`)).for('update')
     if (matches.length !== 1) return null
@@ -40,13 +40,20 @@ export async function recordInstagramReply(organizationId: string, data: { usern
     if (data.timestampEstimated) {
       const [anchor] = await tx.select().from(messages).where(and(eq(messages.id,data.anchorMessageId || ''),eq(messages.leadId,lead.id),eq(messages.organizationId,organizationId),eq(messages.isFromLead,false)))
       const observed = new Date(data.observedAt || '').getTime()
-      if (!Number.isInteger(data.sequenceOrdinal) || data.sequenceOrdinal! < 1 || !anchor || !(anchor.sentVia === 'instagram_browser_ai' || anchor.id.startsWith('msg_outreach_')) || anchor.createdAt.toISOString() !== data.receivedAfter || !Number.isFinite(observed) || observed < anchor.createdAt.getTime() || observed > Date.now()+60000 || Date.now()-anchor.createdAt.getTime() > 86400000) return null
+      if (!Number.isInteger(data.sequenceOrdinal) || data.sequenceOrdinal! < 1 || !anchor || !(anchor.sentVia === 'instagram_browser_ai' || anchor.id.startsWith('msg_outreach_')) || anchor.createdAt.toISOString() !== data.receivedAfter || !Number.isFinite(observed) || observed < anchor.createdAt.getTime() || observed > Date.now()+60000) return null
     } else if (!data.receivedAt) return null
     const [message] = await tx.insert(messages).values({
       id: data.timestampEstimated ? browserSequenceMessageId(organizationId,lead.id,data.anchorMessageId!,data.sequenceOrdinal!) : `msg_${crypto.randomUUID().replace(/-/g, '')}`, organizationId, leadId: lead.id,
       role: 'user', content: data.content, sentVia: data.timestampEstimated ? 'instagram_browser_observed' : 'instagram_browser', isFromLead: true, instagramMessageId: data.externalId, createdAt:new Date(data.timestampEstimated ? data.observedAt! : data.receivedAt!),
     }).onConflictDoNothing().returning()
-    if (message && data.timestampEstimated) await tx.insert(jobs).values({id:`inbound_evidence_${message.id}`,organizationId,leadId:lead.id,kind:'instagram_inbound_evidence',status:'completed',payload:JSON.stringify({observedAt:data.observedAt,receivedAfter:data.receivedAfter,anchorMessageId:data.anchorMessageId,timestampEstimated:true,sequenceOrdinal:data.sequenceOrdinal}),finishedAt:new Date()}).onConflictDoNothing()
+    if (message && data.timestampEstimated) await tx.insert(jobs).values({id:`inbound_evidence_${message.id}`,organizationId,leadId:lead.id,kind:'instagram_inbound_evidence',status:'completed',payload:JSON.stringify({observedAt:data.observedAt,receivedAfter:data.receivedAfter,anchorMessageId:data.anchorMessageId,timestampEstimated:true,sequenceOrdinal:data.sequenceOrdinal,requiresHumanReview:data.requiresHumanReview === true}),finishedAt:new Date()}).onConflictDoNothing()
+    // A replay can reveal a later outgoing message absent from our history.
+    // Escalate the existing proof monotonically; never rewrite its receipt bound
+    // or observedAt, and never clear review on a subsequent scan.
+    if (data.timestampEstimated && data.requiresHumanReview) {
+      const messageId=message?.id || browserSequenceMessageId(organizationId,lead.id,data.anchorMessageId!,data.sequenceOrdinal!)
+      await tx.update(jobs).set({payload:sql`jsonb_set(${jobs.payload}::jsonb, '{requiresHumanReview}', 'true'::jsonb)::text`}).where(and(eq(jobs.id,`inbound_evidence_${messageId}`),eq(jobs.organizationId,organizationId),eq(jobs.leadId,lead.id),eq(jobs.kind,'instagram_inbound_evidence')))
+    }
     if (message) await tx.update(leads).set({ leadStatus: requestsOptOut(data.content) ? 'opted_out' : 'replied', ...(requestsOptOut(data.content) ? {noContact:true,noContactReason:'Pedido de não contacto recebido no Instagram'} : {}), lastInteractionAt: new Date(), updatedAt: new Date() }).where(and(eq(leads.id, lead.id), eq(leads.organizationId, organizationId)))
     return { imported: !!message, leadId: lead.id, messageId: message?.id ?? null }
   })
