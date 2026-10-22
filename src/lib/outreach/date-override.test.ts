@@ -1,9 +1,9 @@
 import {expect,it} from 'vitest'
 import {effectiveOutreachConfig,outreachConfigSchema,canClassifyDaily} from './state'
 const config=outreachConfigSchema.parse({enabled:true,maxDaily:5,dateOverride:{date:'2026-10-16',maxDaily:20,minIntervalSeconds:1800}})
-it('never raises the permanent five-contact cap or permits undated/future exceptions',()=>{
+it('never raises the permanent five-contact cap or permits invalid exceptions',()=>{
  expect(outreachConfigSchema.safeParse({enabled:true,maxDaily:20}).success).toBe(false)
- expect(outreachConfigSchema.safeParse({...config,dateOverride:{...config.dateOverride,date:'2026-10-17'}}).success).toBe(false)
+ expect(outreachConfigSchema.safeParse({...config,dateOverride:{...config.dateOverride,date:'2026-02-30'}}).success).toBe(false)
  expect(outreachConfigSchema.safeParse({...config,dateOverride:{...config.dateOverride,maxDaily:21}}).success).toBe(false)
  expect(outreachConfigSchema.safeParse({...config,dateOverride:{...config.dateOverride,minIntervalSeconds:90}}).success).toBe(false)
  expect(outreachConfigSchema.parse({enabled:true,maxDaily:5}).dateOverride).toBeUndefined()
@@ -24,4 +24,11 @@ it('does not enable a disabled configuration or mutate its base and preserves cl
  expect(config.maxDaily).toBe(5)
  expect(canClassifyDaily(19)).toBe(true);expect(canClassifyDaily(20)).toBe(false)
  expect(effectiveOutreachConfig({enabled:true,maxDaily:3},new Date('2026-10-17T12:00:00Z'))).toMatchObject({maxDaily:3,minIntervalSeconds:90,enabled:true})
+})
+
+it('allows a new explicitly dated exception and expires the next Lisbon day',()=>{
+ const today=outreachConfigSchema.parse({...config,dateOverride:{date:'2026-10-22',maxDaily:20,minIntervalSeconds:1800},targetBusinessTypes:['construction','architecture','gym','condo_management']})
+ expect(effectiveOutreachConfig(today,new Date('2026-10-22T12:00:00Z'))).toMatchObject({enabled:true,maxDaily:20,overrideActive:true})
+ expect(effectiveOutreachConfig(today,new Date('2026-10-23T08:00:00Z'))).toMatchObject({enabled:false,maxDaily:5,overrideActive:false})
+ for(const date of ['2026-2-22','2026-02-30','2026-13-01','2026-00-01']) expect(outreachConfigSchema.safeParse({...today,dateOverride:{...today.dateOverride,date}}).success).toBe(false)
 })

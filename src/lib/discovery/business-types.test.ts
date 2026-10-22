@@ -17,3 +17,11 @@ it('keeps legacy segment discovery and supports all four requested sectors toget
  expect(segmentMatches('Empresa de limpeza profissional Lisboa','limpezas')).toBe(true)
  for(const text of ['Construtora ABC','Arquiteta Joana | atelier','Engenheiro civil','Restaurante ABC']) expect(segmentMatches(text,'construtoras, arquitetos, engenheiros, restaurantes')).toBe(true)
 })
+
+it('accepts real gyms and condominium managers while excluding personal fitness creators',()=>{
+ for(const [text,keyword,type] of [['Ginásio ABC | Musculação e aulas de grupo em Lisboa','ginásios','gym'],['Academia Fitness Club | Espaço de treino em Lisboa','academias','gym'],['Gestão e administração de condomínios em Lisboa','condomínios','condo_management']]) {
+  expect(professionalBusinessType(text)).toBe(type)
+  expect(segmentMatches(text,keyword)).toBe(true)
+ }
+ for(const text of ['Personal trainer | Treino no ginásio | Influencer','Adoro o ginásio e fitness','Academia de arquitetura','Empreendedor | Lifestyle']) expect(professionalBusinessType(text)).not.toBe('gym')
+})

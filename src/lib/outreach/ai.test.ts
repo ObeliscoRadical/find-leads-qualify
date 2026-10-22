@@ -108,7 +108,7 @@ it('uses one complete business enum for strict provider JSON schema and local pa
  await classifyAndDraft({username:'empresa',name:'Empresa',bio:'Empresa de limpeza profissional'})
  const request=JSON.parse(String(fetcher.mock.calls[0][1]?.body))
  expect(request.response_format.json_schema.schema.properties.businessType.enum).toEqual([...outreachBusinessTypes])
- for(const type of ['construction','architecture','engineering','restaurant','cleaning_services']) expect(outreachBusinessTypes).toContain(type)
+ for(const type of ['construction','architecture','engineering','restaurant','gym','condo_management','cleaning_services']) expect(outreachBusinessTypes).toContain(type)
  expect(classificationSchema.safeParse({...classified,businessType:'student'}).success).toBe(false)
  expect(request.messages[0].content).toContain('Prioridade comercial permanente')
  expect(request.messages[0].content).toContain('o nome do restaurante e o cargo')
