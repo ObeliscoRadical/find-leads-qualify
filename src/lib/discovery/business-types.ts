@@ -7,7 +7,7 @@ export function professionalBusinessType(text: string): PriorityBusinessType | n
   if (/\b(?:arquitet[oa]s?|arquitect[oa]s?|arquitetura|arquitectura)\b/.test(value)) return 'architecture';
   if (/\bengenheir[oa]s?\b|\bengenharia\s+(?:civil|estrutural|eletrica|eletrotecnica|e construcao)|\b(?:gabinete|empresa) de engenharia\b/.test(value)) return 'engineering';
   if (/\b(?:gestao|administracao|gestora|administradora)\s+(?:e\s+(?:gestao|administracao)\s+)?(?:de\s+)?condominios?\b/.test(value)) return 'condo_management';
-  const gym = /\b(?:ginasios?|gyms?|fitness\s*(?:club|center|centre)|academia\s+(?:fitness|de musculacao))\b/.test(value);
+  const gym = /\b(?:ginasios?|gyms?|fitness\s*(?:clubs?|centers?|centres?)|academia\s+(?:fitness|de musculacao))\b/.test(value);
   const personalFitness = /\b(?:personal trainer|treinador pessoal|influencer|foodie|lifestyle)\b|\b(?:adoro|gosto|treino no)\b/.test(value);
   if (gym && !personalFitness) return 'gym';
   const restaurant = /\b(?:restaurantes?|restauracao|pizzaria|churrasqueira|marisqueira|bistro|tasca)\b/.test(value);

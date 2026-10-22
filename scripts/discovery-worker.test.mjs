@@ -157,3 +157,32 @@ test('daily outreach authorization expires without stopping discovery',async()=>
  assert.equal(outreachAuthorized({...settings,outreachAuthorizedUntil:'invalid'}),false)
  assert.equal(outreachAuthorized({...settings,automaticOutreachEnabled:false},0),false)
 })
+
+test('inspects abbreviated brand results before requiring evidence from the real bio', async () => {
+  const {discover} = await import('./discovery-worker.mjs')
+  let current
+  const visited=[]
+  const input={count:async()=>1,waitFor:async()=>{},fill:async()=>{}}
+  const page={url:()=>current,goto:async url=>{current=url;visited.push(url)},getByRole:()=>input,waitForFunction:async()=>{},
+    locator:selector=>({count:async()=>selector.startsWith('input')?0:1,first(){return this},waitFor:async()=>{},
+      evaluateAll:async()=>[{href:'/unrelated/',text:'unrelated\nJoão Silva'},{href:'/arx_portugal/',text:'arx_portugal\nARX Portugal'}],
+      innerText:async()=>current?.includes('/arx_portugal/')?'arx_portugal\n20 seguidores\nARX Portugal\nGabinete de arquitetura em Lisboa':current?.includes('/unrelated/')?'unrelated\n20 seguidores\nViagens e família':'Nenhum resultado',
+    })}
+  const result=await discover(page,{keywords:'arquitetura',location:'Lisboa',limit:2})
+  assert.deepEqual(result.map(value=>value.username),['arx_portugal'])
+  assert.ok(visited.includes('https://www.instagram.com/unrelated/'))
+})
+
+test('bounds full bio inspections to twenty candidates per keyword', async () => {
+  const {discover} = await import('./discovery-worker.mjs')
+  let current
+  let inspected=0
+  const input={count:async()=>1,waitFor:async()=>{},fill:async()=>{}}
+  const page={url:()=>current,goto:async url=>{current=url;if(!url.includes('/explore/'))inspected++},getByRole:()=>input,waitForFunction:async()=>{},
+    locator:selector=>({count:async()=>selector.startsWith('input')?0:1,first(){return this},waitFor:async()=>{},
+      evaluateAll:async()=>Array.from({length:30},(_,i)=>({href:`/brand${i}/`,text:`brand${i}\nBrand ${i}`})),
+      innerText:async()=>current?.includes('/explore/')?'Nenhum resultado':`${current.split('/').at(-2)}\n20 seguidores\nPerfil pessoal`,
+    })}
+  assert.deepEqual(await discover(page,{keywords:'arquitetura',location:'Lisboa',limit:20}),[])
+  assert.equal(inspected,20)
+})

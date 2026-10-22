@@ -71,7 +71,7 @@ export async function discover(page, job) {
       job.assertActive?.()
       await guard(page)
       const links = await page.locator('main a[href]').evaluateAll(nodes => nodes.map(a => ({ href: a.href, text: a.innerText })))
-      candidates = uniqueProfiles(links).filter(candidate => !existing.has(candidate.username) && !profiles.has(candidate.username) && segmentMatches(`${candidate.username} ${candidate.displayName}`, keyword))
+      candidates = uniqueProfiles(links).filter(candidate => !existing.has(candidate.username) && !profiles.has(candidate.username)).slice(0, 20)
       if (candidates.length) break
       const mainText = await page.locator('main').innerText()
       if (/nenhum resultado|no results|nao encontramos|não encontramos/i.test(mainText)) break

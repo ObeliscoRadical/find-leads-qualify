@@ -8,3 +8,5 @@ test('Chrome segment mirror recognises the newly authorized business scope', () 
   assert.equal(professionalBusinessType('Personal trainer | Treino no ginásio | Lifestyle'),null);
   assert.equal(professionalBusinessType('Empreendedor | Viagens e família'),null);
 });
+
+test('accepts plural fitness club labels',()=>{ assert.equal(professionalBusinessType('PHIVE Fitness Clubs | Lisboa'),'gym'); assert.equal(professionalBusinessType('ABC Fitness Centers | Oeiras'),'gym') });

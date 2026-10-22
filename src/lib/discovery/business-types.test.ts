@@ -25,3 +25,5 @@ it('accepts real gyms and condominium managers while excluding personal fitness 
  }
  for(const text of ['Personal trainer | Treino no ginásio | Influencer','Adoro o ginásio e fitness','Academia de arquitetura','Empreendedor | Lifestyle']) expect(professionalBusinessType(text)).not.toBe('gym')
 })
+
+it('recognises fitness club plural brands',()=>{expect(professionalBusinessType('PHIVE Fitness Clubs | Lisboa')).toBe('gym')})
